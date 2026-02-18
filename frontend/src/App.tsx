@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
-import { GoogleGenAI, Modality, Type, type FunctionDeclaration } from '@google/genai';
-import { AppState, type Achievement } from './types';
-import { decode, decodeAudioData, createPcmBlob } from './services/audioUtils';
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { GoogleGenAI, Modality, Type, FunctionDeclaration } from '@google/genai';
+import { AppState, StoryScene, Achievement } from './types';
+import { encode, decode, decodeAudioData, createPcmBlob } from './services/audioUtils';
+
+const API_KEY = process.env.API_KEY || '';
 
 const INITIAL_ACHIEVEMENTS: Achievement[] = [
   { id: 'bunny_hop', title: 'Hop-Skip', description: 'Hopped around like a real bunny', icon: '🐰', unlocked: false },
@@ -60,7 +61,7 @@ const showChoiceDeclaration: FunctionDeclaration = {
       options: { 
         type: Type.ARRAY, 
         items: { type: Type.STRING },
-        description: 'A list of 2 or 3 story choices in Russian.' 
+        description: 'A list of 2 or 3 story choices.' 
       },
     },
     required: ['options'],
@@ -70,6 +71,7 @@ const showChoiceDeclaration: FunctionDeclaration = {
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [currentIllustration, setCurrentIllustration] = useState<string | null>(null);
+  const [userTranscription, setUserTranscription] = useState('');
   const [aiTranscription, setAiTranscription] = useState('');
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [achievements, setAchievements] = useState<Achievement[]>(INITIAL_ACHIEVEMENTS);
@@ -133,7 +135,7 @@ const App: React.FC = () => {
 
   const selectChoice = (choice: string) => {
     setStoryChoices([]);
-    sessionPromiseRef.current?.then(s => s.sendClientContent({ turns: [{ text: `I choose: ${choice}` }], turnComplete: true }));
+    sessionPromiseRef.current?.then(s => s.send({ text: `I choose: ${choice}` }));
   };
 
   const handleSessionMessage = async (message: any) => {
@@ -141,11 +143,13 @@ const App: React.FC = () => {
     if (message.serverContent?.outputTranscription) {
       setAiTranscription(prev => prev + message.serverContent.outputTranscription.text);
     } else if (message.serverContent?.inputTranscription) {
+      setUserTranscription(prev => prev + message.serverContent.inputTranscription.text);
       setIsUserSpeaking(true);
     }
 
     if (message.serverContent?.turnComplete) {
       setAiTranscription('');
+      setUserTranscription('');
       setIsUserSpeaking(false);
     }
 
@@ -167,7 +171,7 @@ const App: React.FC = () => {
       sourcesRef.current.forEach(s => s.stop());
       sourcesRef.current.clear();
       nextStartTimeRef.current = 0;
-      setAiTranscription('(Сказка приостановлена...)');
+      setAiTranscription('(Story paused...)');
       setStoryChoices([]);
     }
 
