@@ -10,6 +10,8 @@ Gemini Tales is an interactive storytelling experience where children can talk t
 
 A separate **multi-agent backend** (Researcher → Judge → Content Builder) can generate structured educational content from any topic using the Google Agent Development Kit (ADK) and the Agent-to-Agent (A2A) protocol.
 
+📐 **[Architecture →](ARCHITECTURE.md)** — deep-dive into system design, data flows, and key decisions.
+
 ---
 
 ## ✨ Key Features
