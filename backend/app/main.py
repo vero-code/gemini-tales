@@ -183,8 +183,8 @@ async def chat_stream(request: SimpleChatRequest):
             # Send progress updates based on which agent is active
             if event["author"] == "researcher":
                  yield json.dumps({"type": "progress", "text": "🔍 Researcher is gathering information..."}) + "\n"
-            # elif event["author"] == "judge":
-            #      yield json.dumps({"type": "progress", "text": "⚖️ Judge is evaluating findings..."}) + "\n"
+            elif event["author"] == "judge":
+                 yield json.dumps({"type": "progress", "text": "⚖️ Judge is evaluating findings..."}) + "\n"
             # elif event["author"] == "content_builder":
             #      yield json.dumps({"type": "progress", "text": "✍️ Content Builder is writing the course..."}) + "\n"
             # Accumulate final text
