@@ -185,8 +185,8 @@ async def chat_stream(request: SimpleChatRequest):
                  yield json.dumps({"type": "progress", "text": "🔍 Researcher is gathering information..."}) + "\n"
             elif event["author"] == "judge":
                  yield json.dumps({"type": "progress", "text": "⚖️ Judge is evaluating findings..."}) + "\n"
-            # elif event["author"] == "content_builder":
-            #      yield json.dumps({"type": "progress", "text": "✍️ Content Builder is writing the course..."}) + "\n"
+            elif event["author"] == "content_builder":
+                 yield json.dumps({"type": "progress", "text": "✍️ Content Builder is writing the course..."}) + "\n"
             # Accumulate final text
             if "content" in event and event["content"]:
                 content = genai_types.Content.model_validate(event["content"])
