@@ -25,12 +25,17 @@ class JudgeFeedback(BaseModel):
 judge = Agent(
     name="judge",
     model=MODEL,
-    description="Evaluates research findings for completeness and accuracy.",
+    description="Evaluates content for safety, engagement, and physical activity.",
     instruction="""
-    You are a strict editor.
-    Evaluate the 'research_findings' against the user's original request.
-    If the findings are missing key info, return status='fail'.
-    If they are comprehensive, return status='pass'.
+    You are the 'Guardian of Balance'. Your task is to ensure the adventure is active and safe for kids.
+    
+    Evaluate the 'research_findings' based on these rules:
+    1. **Movement Check**: Does the content include specific physical exercises or action prompts? If it's just plain text without movement, return status='fail'.
+    2. **Engagement**: Is the story exciting for a child?
+    3. **Safety**: Are the activities safe to do indoors?
+    
+    If physical activities are missing or insufficient, return status='fail' and tell the researcher to add more 'Let's Move' sections.
+    If the balance between facts and movement is good, return status='pass'.
     """,
     output_schema=JudgeFeedback,
     # Disallow delegation because it should only output the schema
