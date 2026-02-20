@@ -40,34 +40,34 @@ def create_save_output_callback(key: str):
 
 # --- Remote Agents ---
 
-# Connect to the Researcher (Localhost port 8001)
+# Adventure Seeker (Researcher)
 researcher_url = os.environ.get("RESEARCHER_AGENT_CARD_URL", "http://localhost:8001/a2a/agent/.well-known/agent-card.json")
 researcher = RemoteA2aAgent(
     name="researcher",
     agent_card=researcher_url,
-    description="Gathers information using Google Search.",
+    description="Gathers fairy-tale locations and physical activities.",
     # IMPORTANT: Save the output to state for the Judge to see
     after_agent_callback=create_save_output_callback("research_findings"),
     # IMPORTANT: Use authenticated client for communication
     httpx_client=create_authenticated_client(researcher_url)
 )
 
-# Connect to the Judge (Localhost port 8002)
+# Guardian of Balance (Judge)
 judge_url = os.environ.get("JUDGE_AGENT_CARD_URL", "http://localhost:8002/a2a/agent/.well-known/agent-card.json")
 judge = RemoteA2aAgent(
     name="judge",
     agent_card=judge_url,
-    description="Evaluates research.",
+    description="Ensures the story is active and safe.",
     after_agent_callback=create_save_output_callback("judge_feedback"),
     httpx_client=create_authenticated_client(judge_url)
 )
 
-# Content Builder (Localhost port 8003)
-content_builder_url = os.environ.get("CONTENT_BUILDER_AGENT_CARD_URL", "http://localhost:8003/a2a/agent/.well-known/agent-card.json")
+# Storysmith (Content Builder)
+content_builder_url = os.environ.get("BUILDER_AGENT_CARD_URL", "http://localhost:8003/a2a/agent/.well-known/agent-card.json")
 content_builder = RemoteA2aAgent(
     name="content_builder",
     agent_card=content_builder_url,
-    description="Builds the course.",
+    description="Weaves the findings into a magical adventure story.",
     httpx_client=create_authenticated_client(content_builder_url)
 )
 
@@ -105,15 +105,15 @@ escalation_checker = EscalationChecker(name="escalation_checker")
 # Define the Research Loop: Researcher -> Judge -> EscalationChecker.
 research_loop = LoopAgent(
     name="research_loop",
-    description="Iteratively researches and judges until quality standards are met.",
+    description="Refines the adventure until it's perfectly active and safe.",
     sub_agents=[researcher, judge, escalation_checker],
     max_iterations=3,
 )
 
 # Define the Root Agent (Pipeline)
 root_agent = SequentialAgent(
-    name="course_creation_pipeline",
-    description="A pipeline that researches a topic and then builds a course from it.",
+    name="gemini_tales_pipeline",
+    description="A pipeline that creates interactive movement-based stories for kids.",
     sub_agents=[research_loop, content_builder],
 )
 
