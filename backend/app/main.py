@@ -1,6 +1,7 @@
 import logging
 import os
 import json
+from dotenv import load_dotenv
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import httpx
@@ -17,6 +18,8 @@ from opentelemetry.sdk.trace import TracerProvider, export
 from pydantic import BaseModel
 
 from authenticated_httpx import create_authenticated_client
+
+load_dotenv()
 
 class Feedback(BaseModel):
     score: float

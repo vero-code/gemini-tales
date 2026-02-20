@@ -1,7 +1,12 @@
+import os
+from dotenv import load_dotenv
 from google.adk.agents import Agent
 
+load_dotenv()
 
-MODEL = "gemini-2.5-pro"
+MODEL = os.getenv("MODEL_NAME", "gemini-2.5-pro")
+PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
+LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION")
 
 content_builder = Agent(
     name="content_builder",
@@ -20,4 +25,5 @@ content_builder = Agent(
     Ensure the content directly addresses the user's original request.
     """,
 )
+
 root_agent = content_builder

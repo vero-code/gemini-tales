@@ -19,6 +19,11 @@ import sys
 import typing
 import warnings
 
+from dotenv import load_dotenv
+
+# Load .env before anything else so os.getenv calls (incl. Click defaults) see the values
+load_dotenv()
+
 import click
 import uvicorn
 

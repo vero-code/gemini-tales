@@ -1,8 +1,13 @@
+import os
+from dotenv import load_dotenv
 from google.adk.agents import Agent
 from google.adk.tools.google_search_tool import google_search
 
+load_dotenv()
 
-MODEL = "gemini-2.5-pro"
+MODEL = os.getenv("MODEL_NAME", "gemini-2.5-pro")
+PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
+LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION")
 
 # Define the Researcher Agent
 researcher = Agent(

@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 import json
 from typing import AsyncGenerator
 from google.adk.agents import BaseAgent, LoopAgent, SequentialAgent
@@ -8,6 +9,12 @@ from google.adk.agents.invocation_context import InvocationContext
 from google.adk.agents.callback_context import CallbackContext
 
 from authenticated_httpx import create_authenticated_client
+
+load_dotenv()
+
+MODEL = os.getenv("MODEL_NAME", "gemini-2.5-pro")
+PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
+LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION")
 
 # --- Callbacks ---
 def create_save_output_callback(key: str):

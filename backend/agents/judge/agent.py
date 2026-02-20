@@ -1,10 +1,15 @@
+import os
+from dotenv import load_dotenv
 from typing import Literal
 from google.adk.agents import Agent
 from google.adk.apps.app import App
 from pydantic import BaseModel, Field
 
+load_dotenv()
 
-MODEL = "gemini-2.5-pro"
+MODEL = os.getenv("MODEL_NAME", "gemini-2.5-pro")
+PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
+LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION")
 
 # 1. Define the Schema
 class JudgeFeedback(BaseModel):
