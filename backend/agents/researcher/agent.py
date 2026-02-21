@@ -27,7 +27,6 @@ researcher_instruction = """
     2. **Identify** - Select safe and fun physical exercises that can be woven into the story.
     3. **Synthesize** - Combine lore and movement into a set of actionable ideas for a child.
     4. **Refine** - Adjust the search and findings if the judge provides feedback about lack of activity.
-    5. **Cite Sources** - Always keep track of the URLs you find during search to ensure they are available in the response metadata.
 
     # Your Boundaries
     ## Scope Boundaries

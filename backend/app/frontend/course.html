@@ -34,8 +34,31 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // Debug logic: use sample data if ?debug=true is in URL or no data exists
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('debug') === 'true') {
+                localStorage.setItem('currentCourse', '# Magical Debug Mode\n\n## Chapter 1: Layout Test\nThis is a demonstration text. It allows you to quickly adjust CSS and HTML right now.\n\n## Chapter 2: Search Suggestions\nBelow you can see how Google Search links look when there are many of them and they need to wrap to the next line.');
+                localStorage.setItem('renderedContent', `
+                    <div class="container">
+                        <div class="headline" style="display:flex; align-items:center; gap:8px;">
+                            <img src="https://www.google.com/favicon.ico" width="16"> 
+                            <span class="headline-label">Search suggestions</span>
+                        </div>
+                        <div class="carousel">
+                            <div class="chip">Pirate Treasures</div>
+                            <div class="chip">Sea Legends</div>
+                            <div class="chip">How to find treasure</div>
+                            <div class="chip">Treasure Island Map</div>
+                            <div class="chip">Captain Adventures</div>
+                            <div class="chip">Ocean Mysteries</div>
+                            <div class="chip">Golden Coast</div>
+                        </div>
+                    </div>
+                `);
+            }
+
             const courseData = localStorage.getItem('currentCourse');
-            const sourcesData = JSON.parse(localStorage.getItem('currentSources') || '[]');
+            const renderedContent = localStorage.getItem('renderedContent');
             if (!courseData) {
                 window.location.href = '/';
                 return;
@@ -47,19 +70,38 @@
             // Render Markdown
             contentContainer.innerHTML = marked.parse(courseData);
 
-            // Add sources section
-            if (sourcesData.length > 0) {
+            // Add official Google Search suggestions (Required by policy)
+            if (renderedContent && renderedContent !== 'null') {
                 const sourcesDiv = document.createElement('div');
                 sourcesDiv.className = 'sources-section';
-                const linksHtml = sourcesData.map((url, index) => 
-                    `<li><a href="${url}" target="_blank" class="source-link">Source [${index + 1}]</a></li>`
-                ).join('');
                 sourcesDiv.innerHTML = `
                     <div class="sources-divider"></div>
-                    <p class="sources-title">✨ Adventure verified by Google Search:</p>
-                    <ul class="sources-list">${linksHtml}</ul>
+                    <div id="google-search-suggestions-container"></div>
                 `;
                 contentContainer.appendChild(sourcesDiv);
+                
+                // Create Shadow DOM to isolate Google's generic classes like .container
+                const container = document.getElementById('google-search-suggestions-container');
+                const shadow = container.attachShadow({mode: 'open'});
+                
+                // Inject a small style fix to allow chips to wrap and not overflow
+                const styleFix = `
+                    <style>
+                        .container { 
+                            flex-wrap: wrap !important; 
+                            height: auto !important;
+                            padding: 8px 0 !important;
+                        }
+                        .carousel { 
+                            white-space: normal !important; 
+                            overflow: visible !important; 
+                        }
+                        .chip { 
+                            margin-bottom: 8px !important; 
+                        }
+                    </style>
+                `;
+                shadow.innerHTML = styleFix + renderedContent;
             }
             
             // Generate TOC from h2 elements

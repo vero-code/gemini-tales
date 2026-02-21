@@ -182,33 +182,66 @@ async def chat_stream(request: SimpleChatRequest):
 
     async def event_generator():
         final_text = ""
-        sources = [] # List for storing links
+        rendered_content = None
         async for event in events:
-            if event["author"] == "researcher" and "groundingMetadata" in event:
-                metadata = event["groundingMetadata"]
-                if "groundingChunks" in metadata:
-                    for chunk in metadata["groundingChunks"]:
-                        if "web" in chunk and "uri" in chunk["web"]:
-                            sources.append(chunk["web"]["uri"])
-                yield json.dumps({"type": "progress", "text": "🔍 Researcher found sources..."}) + "\n"
+            author = event.get("author")
+            
+            # 1. Search for rendered_content exactly where ADK puts it
+            # It can be in grounding_metadata or a top-level field in some event types
+            def extract_google_html(data):
+                if not isinstance(data, dict): return None
+                # Check direct fields
+                for key in ["rendered_content", "renderedContent"]:
+                    if data.get(key): return data.get(key)
+                # Check grounding_metadata
+                gm = data.get("grounding_metadata") or data.get("groundingMetadata")
+                if isinstance(gm, dict):
+                    rc = gm.get("rendered_content") or gm.get("renderedContent")
+                    if rc: return rc
+                # Recursive search for deeper nesting
+                for v in data.values():
+                    if isinstance(v, dict):
+                        res = extract_google_html(v)
+                        if res: return res
+                return None
 
-            # Send progress updates based on which agent is active
-            if event["author"] == "researcher":
-                 yield json.dumps({"type": "progress", "text": "🔍 Researcher is gathering information..."}) + "\n"
-            elif event["author"] == "judge":
-                 yield json.dumps({"type": "progress", "text": "⚖️ Judge is evaluating findings..."}) + "\n"
-            elif event["author"] == "content_builder":
-                 yield json.dumps({"type": "progress", "text": "✍️ Content Builder is writing the story..."}) + "\n"
-            # Accumulate final text
+            rc = extract_google_html(event)
+            if rc and not rendered_content:
+                rendered_content = rc
+                logger.info(f"Found google search html from {author}")
+                yield json.dumps({"type": "progress", "text": "🔍 Google Search sources found..."}) + "\n"
+
+            # 2. Progress updates
+            if author == "researcher":
+                 yield json.dumps({"type": "progress", "text": "🔍 Adventure Seeker is scouting..."}) + "\n"
+            elif author == "judge":
+                 yield json.dumps({"type": "progress", "text": "⚖️ Guardian is checking safety..."}) + "\n"
+            elif author == "content_builder":
+                 yield json.dumps({"type": "progress", "text": "✍️ Storysmith is writing..."}) + "\n"
+            
+            # 3. Accumulate text but STRICTLY FILTER OUT thoughts and technical noise
             if "content" in event and event["content"]:
-                content = genai_types.Content.model_validate(event["content"])
-                for part in content.parts: # type: ignore
-                    if part.text:
-                        final_text += part.text
+                parts = event["content"].get("parts", [])
+                for part in parts:
+                    # BLOCK thoughts (this removes the "AI brain" chatter)
+                    if part.get("thought") == True:
+                        continue
+                    
+                    text = part.get("text")
+                    if text:
+                        # Filter out Judge's JSON and internal feedback
+                        is_technical = text.strip().startswith("{") or text.strip().startswith("---{") or "Feedback:" in text
+                        if not is_technical:
+                            # Only take text from the Storysmith or Orchestrator to keep clean story
+                            if author in ["content_builder", "gemini_tales_pipeline"]:
+                                final_text += text
         
-        unique_sources = list(set(sources))
+        # Final safety check for text
+        if not final_text.strip():
+            final_text = "The story is taking shape..."
+
         # Send final result
-        yield json.dumps({"type": "result", "text": final_text.strip(), "sources": unique_sources}) + "\n"
+        yield json.dumps({"type": "result", "text": final_text.strip(), "rendered_content": rendered_content}) + "\n"
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
