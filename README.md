@@ -1,82 +1,80 @@
 # ✨ Gemini Tales
 
-![Status](https://img.shields.io/badge/status-in%20development-orange?style=flat-square) ![Hackathon](https://img.shields.io/badge/hackathon-Gemini%20Live%20Agent%20Challenge-4285F4?style=flat-square&logo=google)
+![Status](https://img.shields.io/badge/status-active%20development-orange?style=flat-square)
+![Hackathon](https://img.shields.io/badge/hackathon-Gemini%20Live%20Agent%20Challenge-4285F4?style=flat-square&logo=google)
+![IDE](https://img.shields.io/badge/IDE-Google%20Antigravity-673AB7?style=flat-square&logo=googlecloud)
+![Version](https://img.shields.io/badge/version-v0.3.0-green?style=flat-square)
 
-> **A magical, interactive AI storyteller for children — powered by Gemini Live API and a multi-agent backend.**
+> **Turning screen time into active adventure — A magical AI storyteller that sees, hears, and moves with your child.**
 
-Gemini Tales is an interactive storytelling experience where children can talk to an AI narrator in real time. The AI watches the child through the camera, listens via microphone, tells enchanting fairy tales, awards badges for participation, generates watercolor illustrations on the fly, and lets the child steer the story with choices and physical movement.
-
-> 🚧 **Work in Progress** — this project is actively being developed as a submission for the **[Gemini Live Agent Challenge](https://googleai.devpost.com/)** hackathon. Features and APIs may change.
-
-A separate **multi-agent backend** (Researcher → Judge → Content Builder) can generate structured educational content from any topic using the Google Agent Development Kit (ADK) and the Agent-to-Agent (A2A) protocol.
-
-📐 **[Architecture →](ARCHITECTURE.md)** — deep-dive into system design, data flows, and key decisions.
+Gemini Tales is an interactive storytelling experience that blends real-time AI conversation with physical activity. While the **Gemini Live API** handles the magical conversation and vision on the frontend, a specialized **multi-agent backend** (built with Google ADK) works behind the scenes to research local legends, verify safety, and craft movement-based "Hero's Challenges."
 
 ---
 
-## ✨ Key Features
+## 🧚 The Experience: Live Storytelling
 
-### 🧚 Interactive Live Storytelling (Frontend)
-| Feature | Description |
-|---|---|
-| 🎙️ **Real-time voice conversation** | Uses **Gemini 2.5 Flash Native Audio** via the Live API — the child can interrupt the story at any time |
-| 📸 **Camera awareness** | Video frames are streamed to Gemini every 4 seconds so the AI can see and react to the child's actions |
-| 🎨 **Dynamic illustration generation** | The AI calls `generateIllustration` and a new watercolor image is generated with **Gemini 2.5 Flash Image** |
-| 🏆 **Achievement system** | Five badges (Hop-Skip, Young Wizard, Little Inquirer, Little Leaf, Good Listener) awarded when the child interacts |
-| 🔀 **Story branching choices** | Every 2–3 minutes the AI presents 2–3 buttons to let the child decide what happens next |
-| 🌊 **Interruption handling** | Child can speak at any point; the AI pauses immediately and responds in character |
+The frontend is a direct bridge to **Gemini 2.5 Flash Native Audio**, allowing for seamless, low-latency interaction.
 
-### 🤖 Multi-agent Course Creation (Backend)
-| Agent | Role |
+| Feature | Magic Behind the Scenes |
 |---|---|
-| 🔍 **Researcher** | Gathers information about the requested topic using Google Search |
-| ⚖️ **Judge** | Evaluates research quality; loops up to 3 times until it passes |
-| ✍️ **Content Builder** | Writes a structured educational course from the approved research |
-| 🎼 **Orchestrator** | Coordinates agents in a `Researcher → Judge → Content Builder` pipeline using Google ADK |
+| 🎙️ **Natural Voice Chat** | Interruption-aware conversation. The child can speak or change the story path at any time. |
+| 📸 **Visual Awareness** | The AI "sees" the child through the camera, reacting to their costumes, toys, or movement in real-time. |
+| 🎨 **On-the-fly Art** | Dynamic watercolor illustrations are generated as the story unfolds using **Gemini 2.5 Flash Image**. |
+| 🏆 **Physical Badges** | Achievements like **Hop-Skip** are awarded for real-world participation and movement. |
+
+---
+
+## 🤖 The Brain: Multi-Agent Story Engine
+
+Our backend uses the **Google Agent Development Kit (ADK)** and the **A2A (Agent-to-Agent) protocol**, following the methodology of the [**"Optimize Agent Behavior"**](https://www.skills.google/paths/3545/course_templates/1564) course.
+
+### 🎭 Meet the Agents (Optimized Workflow v0.3.0)
+
+Each agent is engineered using the **5-pattern prompt architecture** (Identity, Mission, Methodology, Boundaries, and Few-shot Examples) to ensure maximum role-adherence and reliability.
+
+| Agent |  Architecture Highlights | Performance Config |
+|--|--|--|
+| **Adventure Seeker** (Researcher) | Uses multi-step reasoning to plan physical activities. | **Gemini 2.5 Flash** + **BuiltInPlanner** (Temp 0.7). |
+| **Guardian of Balance** (Judge) | Structured Output with strict validation. | **Gemini 2.5 Flash** + **Pydantic Schema** (Temp 0.1). |
+| **Storysmith** (Builder) | Weaves research into immersive fantasy worlds. | **Gemini 2.5 Pro** for maximum literary quality (Temp 0.9). |
+
+#### 1. 🔍 **Adventure Seeker** (The Researcher)
+*   **Role:** World-class scout and pedagogy expert.
+*   **Capability:** Uses `Google Search` to find magical facts about locations, local legends, and identifies safe physical exercises.
+*   **Goal:** Gathers raw "adventure fuel" for the story.
+
+#### 2. ⚖️ **Guardian of Balance** (The Judge)
+*   **Role:** Senior safety officer and fitness expert.
+*   **Capability:** Scans research for "passivity." If the content is too academic or lacks movement, it triggers a retry loop.
+*   **Boundary:** Ensures every "Magic Task" is safe and appropriate for a 6-year-old.
+
+#### 3. ✍️ **Storysmith** (The Content Builder)
+*   **Role:** Award-winning children's author.
+*   **Capability:** Weaves dry facts into a shimmering fantasy world.
+*   **Goal:** Embeds **Hero's Challenges** (jumping, crawling, balancing) into the narrative structure.
+
+### 🎼 Orchestration (The Continuous Refinement Loop)
+The agents communicate over A2A in a loop to ensure high-quality output:
+1.  **Orchestrator** triggers the **Adventure Seeker**.
+2.  **Guardian of Balance** evaluates the findings (up to 3 times).
+3.  If it fails (too boring/passive), the Seeker gets specific feedback and tries again.
+4.  Once approved, the **Storysmith** crafts the final interactive script.
+
+### 🛠️ Key Optimization Techniques Applied
+
+-   **Full 5-Pattern Prompting**: Agent instructions include **Few-shot examples** to ensure predictable narrative and logic flows.
+    
+-   **Structured Output (Pydantic)**: The **Guardian of Balance** enforces a strict **BaseModel** schema, guaranteeing valid JSON with `pass`/`fail` status.
+    
+-   **Centralized Multi-Layer Safety**: All agents share a `STRICT_SAFETY` configuration, blocking harmful categories at the **BLOCK_LOW_AND_ABOVE** threshold.
+    
+-   **Reasoning-on-the-Fly**: The **Adventure Seeker** leverages **BuiltInPlanner** (budget: 1024) to analyze search results before generating exercises.
+    
+-   **Dynamic Temperament**: Individual `generate_content_config` settings, from deterministic logic (0.1) to creative storytelling (0.9).
 
 ---
 
 ## 🏗️ Architecture
-
-```
-gemini-tales/
-├── frontend/                   # React + Vite + TypeScript (Gemini Live client)
-│   └── src/
-│       ├── App.tsx             # Main app: Live session, camera, audio, achievements
-│       ├── types.ts            # Shared TypeScript types
-│       └── services/
-│           └── audioUtils.ts   # PCM encode/decode helpers
-│
-└── backend/
-    ├── agents/
-    │   ├── researcher/         # ADK agent – Google Search research
-    │   ├── judge/              # ADK agent – quality evaluation loop
-    │   ├── content_builder/    # ADK agent – course content generation
-    │   └── orchestrator/       # ADK SequentialAgent + LoopAgent pipeline
-    │
-    └── app/                    # FastAPI server + static frontend bundle
-        ├── main.py             # REST + SSE streaming proxy to ADK
-        └── frontend/           # Compiled HTML/CSS/JS (served as static files)
-```
-
-**Data flow (Live storytelling):**
-```
-Child (mic + camera) ──► React App ──► Gemini Live API (gemini-2.5-flash-native-audio-preview)
-                                            │
-                              ┌─────────────┼─────────────┐
-                         generateIllustration  awardBadge  showChoice
-                              │
-                      Gemini Image API (gemini-2.5-flash-image)
-```
-
-**Data flow (Multi-agent course creation):**
-```
-User input ──► FastAPI /api/chat_stream ──► Orchestrator (ADK)
-                                                │
-                                 ┌──────────────┼──────────────┐
-                            Researcher ──► Judge ──► Content Builder
-                             (A2A)         (A2A)        (A2A)
-```
 
 ---
 
@@ -84,124 +82,56 @@ User input ──► FastAPI /api/chat_stream ──► Orchestrator (ADK)
 
 ### Prerequisites
 
-- **Python** ≥ 3.10, < 3.14
-- **Node.js** ≥ 18
-- **[uv](https://docs.astral.sh/uv/)** package manager
-- A **Google Cloud project** with Vertex AI enabled, **or** a **Gemini API key**
-- `gcloud` CLI authenticated (`gcloud auth application-default login`)
+- **Python** 3.10+ & **Node.js** 18+
+- **[uv](https://docs.astral.sh/uv/)** for lightning-fast backend management.
+- **Google Cloud Project** with Vertex AI enabled.
 
----
-
-### 1. Frontend (Live Storytelling App)
-
-The frontend is a standalone React/Vite application that connects directly to the Gemini API from the browser.
-
-```bash
-cd frontend
-cp .env.example .env
-# Set your Gemini API key in .env:
-#   VITE_API_KEY=your_gemini_api_key_here
-npm install
-npm run dev
-```
-
-Open [http://localhost:5173](http://localhost:5173), click **Begin Your Story**, and allow camera + microphone access.
-
-> **Note:** The Live API (`gemini-2.5-flash-native-audio-preview`) and Image generation (`gemini-2.5-flash-image`) require a valid API key with access to these models.
-
----
-
-### 2. Backend (Multi-agent Course Creator)
-
-The backend runs five services: Researcher, Judge, Content Builder, Orchestrator, and the FastAPI app.
+### 1. Backend Launch (v0.3.0)
+The backend runs five distributed services: the App, three specialized agents, and an orchestrator.
 
 ```bash
 cd backend
 cp .env.example .env
-# Edit .env with your Google Cloud settings:
-#   GOOGLE_CLOUD_PROJECT=your-project-id
-#   GOOGLE_CLOUD_LOCATION=us-central1
-#   GOOGLE_GENAI_USE_VERTEXAI=true
-
-# Install dependencies
+# Configure project ID and location
 uv sync
-
-# Start all agents at once
-bash run_local.sh
+# Runs Researcher (8001), Judge (8002), Builder (8003), Orchestrator (8004), and App (8000)
+uv run shared/adk_app.py agents/researcher --host 0.0.0.0 --port 8001 --a2a
+uv run shared/adk_app.py agents/judge --host 0.0.0.0 --port 8002 --a2a
+uv run shared/adk_app.py agents/builder --host 0.0.0.0 --port 8003 --a2a
+uv run shared/adk_app.py agents/orchestrator --host 0.0.0.0 --port 8004 --a2a
+uv run app/main.py
 ```
 
-| Service | Port | Description |
+| Service | Port | Role |
 |---|---|---|
-| App (Frontend + API) | `8000` | FastAPI server with static frontend |
-| Researcher Agent | `8001` | ADK A2A agent |
-| Judge Agent | `8002` | ADK A2A agent |
-| Content Builder | `8003` | ADK A2A agent |
-| Orchestrator | `8004` | ADK pipeline controller |
+| **Orchestrator** | `8004` | Controls the agent pipeline. |
+| **Researcher** | `8001` | "Adventure Seeker" (Search Tool). |
+| **Judge** | `8002` | "Guardian of Balance" (Consistency/Safety). |
+| **Builder** | `8003` | "Storysmith" (Narrative Generation). |
+| **API/App** | `8000` | Gateway & Client Provider. |
 
-Open [http://localhost:8000](http://localhost:8000) and enter a topic to generate a course.
-
-#### Environment variables
-
-| Variable | Description |
-|---|---|
-| `GOOGLE_CLOUD_PROJECT` | Your GCP project ID |
-| `GOOGLE_CLOUD_LOCATION` | Region (e.g. `us-central1`), or `global` for Gemini API |
-| `GOOGLE_GENAI_USE_VERTEXAI` | `true` to use Vertex AI, `false` to use Gemini API key |
-| `GOOGLE_API_KEY` | Gemini API key (only needed when not using Vertex AI) |
-| `AGENT_SERVER_URL` | URL of the Orchestrator (set automatically by `run_local.sh`) |
-
----
-
-## ☁️ Deployment to Google Cloud Run
-
-The included `deploy.sh` script deploys all five services to Cloud Run:
-
-```bash
-cd backend
-# Make sure your .env has GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION set
-bash deploy.sh
-```
-
-Services are deployed in dependency order (Researcher → Judge → Content Builder → Orchestrator → App). The final `course-creator` Cloud Run service is publicly accessible; the agent services require authentication.
+Open http://localhost:8000 in your browser.
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Live AI | [Gemini 2.5 Flash Native Audio](https://ai.google.dev/gemini-api/docs/live) via `@google/genai` |
-| Image AI | Gemini 2.5 Flash Image (`gemini-2.5-flash-image`) |
-| Multi-agent | [Google Agent Development Kit (ADK)](https://google.github.io/adk-docs/) |
-| Agent protocol | [A2A (Agent-to-Agent)](https://google.github.io/A2A/) |
-| Frontend | React 19, TypeScript, Vite 6, TailwindCSS |
-| Backend | FastAPI, Uvicorn, Python ≥ 3.10 |
-| Package manager | [uv](https://docs.astral.sh/uv/) |
-| Observability | OpenTelemetry + Google Cloud Trace |
-| Hosting | Google Cloud Run |
-
----
-
-## 📁 Frontend `.env.example`
-
-```env
-VITE_API_KEY=your_gemini_api_key_here
-```
-
-## 📁 Backend `.env.example`
-
-```env
-GOOGLE_GENAI_USE_VERTEXAI="true"
-GOOGLE_CLOUD_PROJECT=""
-GOOGLE_CLOUD_LOCATION="global"
-```
+-   **Intelligence & Reasoning**: **Gemini 2.5 Flash & Pro** via **Google AI Studio** & **Vertex AI (Google Cloud)**. Using Flash for speed/cost-efficiency and Pro for high-quality creative storytelling.
+    
+-   **Agentic Ecosystem**: **Google ADK (Agent Development Kit)**. The core framework used to build and deploy our autonomous agent personas.
+    
+-   **Development & Debugging**: **Antigravity (IDE)**. Our agentic development platform, evolving the IDE for the agent-first era. Used for agent visualization, cross-surface control (editor, terminal, browser), and real-time monitoring of agent missions.
+    
+-   **Communication Protocol**: **Agent-to-Agent (A2A)**. The standardized protocol for secure and seamless communication between the Researcher, Judge, and Storysmith agents.
+    
+-   **Validation & Reliability**: **Pydantic** for structured data output and **Gemini Safety Settings** for strict content filtering (BLOCK_LOW_AND_ABOVE).
+    
+-   **Runtime & Environments**: **Python 3.10+**, **FastAPI**, and **uv** for high-performance backend management.
 
 ---
 
 ## 📜 License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
 
----
-
-*Built with ❤️ by [Veronika Kashtanova](https://x.com/veron_code)*
+*Created with ❤️ for the next generation of explorers by [Veronika Kashtanova](https://x.com/veron_code)*
