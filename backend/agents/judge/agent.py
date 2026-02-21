@@ -1,13 +1,18 @@
+import sys
 import os
 from dotenv import load_dotenv
 from typing import Literal
+from google.genai import types
 from google.adk.agents import Agent
 from google.adk.apps.app import App
 from pydantic import BaseModel, Field
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+from shared.config import STRICT_SAFETY
+
 load_dotenv()
 
-MODEL = os.getenv("MODEL_NAME", "gemini-2.5-pro")
+MODEL = os.getenv("MODEL_NAME_FLASH", "gemini-2.5-flash")
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION")
 
@@ -64,6 +69,11 @@ judge = Agent(
     # Disallow delegation because it should only output the schema
     disallow_transfer_to_parent=True,
     disallow_transfer_to_peers=True,
+    generate_content_config=types.GenerateContentConfig(
+        temperature=0.1,
+        max_output_tokens=500,
+        safety_settings=STRICT_SAFETY
+    )
 )
 
 root_agent = judge

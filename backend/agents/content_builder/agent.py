@@ -1,7 +1,11 @@
+import sys
 import os
 from dotenv import load_dotenv
+from google.genai import types
 from google.adk.agents import Agent
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+from shared.config import STRICT_SAFETY
 load_dotenv()
 
 MODEL = os.getenv("MODEL_NAME", "gemini-2.5-pro")
@@ -46,6 +50,12 @@ content_builder = Agent(
     User: "[research mentions scary monsters in legends]" 
     You: "The Moon is full of friendly secrets! Instead of scary shadows, let's look for the **Magic Task: The Silver Glow Hunt!** Spin around slowly like a shimmering star!"
     """,
+    generate_content_config=types.GenerateContentConfig(
+        temperature=0.9,
+        max_output_tokens=2500,
+        top_p=0.95,
+        safety_settings=STRICT_SAFETY
+    )
 )
 
 root_agent = content_builder

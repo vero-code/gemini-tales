@@ -1,7 +1,12 @@
+import sys
 import os
 from dotenv import load_dotenv
+from google.genai import types
 from google.adk.agents import Agent
 from google.adk.tools.google_search_tool import google_search
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+from shared.config import STRICT_SAFETY
 
 load_dotenv()
 
@@ -50,6 +55,11 @@ researcher = Agent(
     You: "I will refine the search. I found that ancient Egyptians used boats on the Nile. **Magic Task:** Sit on the floor and pretend to row a big wooden boat for 20 seconds! Pull those oars hard!"
     """,
     tools=[google_search],
+    generate_content_config=types.GenerateContentConfig(
+        temperature=0.7,
+        max_output_tokens=1500,
+        safety_settings=STRICT_SAFETY
+    )
 )
 
 root_agent = researcher
