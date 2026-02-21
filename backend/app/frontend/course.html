@@ -39,8 +39,38 @@
             if (urlParams.get('debug') === 'true') {
                 localStorage.setItem('currentCourse', '# Magical Debug Mode\n\n## Chapter 1: Layout Test\nThis is a demonstration text. It allows you to quickly adjust CSS and HTML right now.\n\n## Chapter 2: Search Suggestions\nBelow you can see how Google Search links look when there are many of them and they need to wrap to the next line.');
                 localStorage.setItem('renderedContent', `
+                    <style>
+                        .container {
+                            display: flex;
+                            flex-direction: column;
+                            gap: 12px;
+                            font-family: 'Google Sans', Roboto, sans-serif;
+                        }
+                        .headline {
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            color: #1f1f1f;
+                            font-size: 14px;
+                        }
+                        .carousel {
+                            display: flex;
+                            flex-wrap: wrap;
+                            gap: 8px;
+                        }
+                        .chip {
+                            display: inline-block;
+                            padding: 6px 16px;
+                            border: 1px solid #d2d2d2;
+                            border-radius: 20px;
+                            font-size: 14px;
+                            color: #5e5e5e;
+                            background: white;
+                            cursor: pointer;
+                        }
+                    </style>
                     <div class="container">
-                        <div class="headline" style="display:flex; align-items:center; gap:8px;">
+                        <div class="headline">
                             <img src="https://www.google.com/favicon.ico" width="16"> 
                             <span class="headline-label">Search suggestions</span>
                         </div>
@@ -88,16 +118,27 @@
                 const styleFix = `
                     <style>
                         .container { 
-                            flex-wrap: wrap !important; 
+                            display: flex !important;
+                            flex-direction: column !important;
+                            align-items: flex-start !important;
+                            gap: 12px !important;
                             height: auto !important;
-                            padding: 8px 0 !important;
+                            padding: 16px !important;
+                        }
+                        .headline {
+                            display: flex !important;
+                            align-items: center !important;
+                            width: 100% !important;
                         }
                         .carousel { 
+                            display: flex !important;
+                            flex-wrap: wrap !important;
                             white-space: normal !important; 
                             overflow: visible !important; 
+                            gap: 8px !important;
                         }
                         .chip { 
-                            margin-bottom: 8px !important; 
+                            margin: 0 !important; 
                         }
                     </style>
                 `;
