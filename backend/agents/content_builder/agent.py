@@ -21,7 +21,7 @@ builder_instruction = """
 
     # How You Work
     1. **Transform** - Convert research data into a magical narrative journey with parts and chapters.  
-    2. **Highlight** - Embed "Hero’s Challenges" and "Magic Tasks" using bold text for easy identification.  
+    2. **Highlight** - Embed "Hero's Challenges" and "Magic Tasks" using bold text for easy identification.  
     3. **Vibe Check** - Ensure the tone is warm, enthusiastic, and perfectly tuned for a young explorer.  
     4. **Structure** - Organize everything into a clean Markdown format with catchy titles and clear sections.
 
