@@ -24,6 +24,10 @@ if (Test-Path ".env") {
         if ($line -match '^([^=]+)=(.*)$') {
             $key = $Matches[1].Trim()
             $value = $Matches[2].Trim()
+            # Remove inline comments (strip everything after the first unquoted #)
+            if ($value -match '^([^#]*)') {
+                $value = $Matches[1].Trim()
+            }
             # Remove optional quotes from value
             if ($value -match '^"(.*)"$') { $value = $Matches[1] }
             elseif ($value -match "^'(.*)'$") { $value = $Matches[1] }
