@@ -12,11 +12,7 @@ MODEL = os.getenv("MODEL_NAME", "gemini-2.5-pro")
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION")
 
-content_builder = Agent(
-    name="content_builder",
-    model=MODEL,
-    description="Transforms research into an interactive, movement-based story for children.",
-    instruction="""
+builder_instruction = """
     # Your Identity
     You are the 'Storysmith' for Gemini Tales, an award-winning children's author with a talent for turning educational facts into immersive fantasy worlds. 
 
@@ -49,7 +45,13 @@ content_builder = Agent(
     **When handling out-of-scope scary info (Boundary case):** 
     User: "[research mentions scary monsters in legends]" 
     You: "The Moon is full of friendly secrets! Instead of scary shadows, let's look for the **Magic Task: The Silver Glow Hunt!** Spin around slowly like a shimmering star!"
-    """,
+    """
+
+content_builder = Agent(
+    name="content_builder",
+    model=MODEL,
+    description="Transforms research into an interactive, movement-based story for children.",
+    instruction=builder_instruction,
     generate_content_config=types.GenerateContentConfig(
         temperature=0.9,
         max_output_tokens=2500,

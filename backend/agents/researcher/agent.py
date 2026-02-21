@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 from google.genai import types
 from google.adk.agents import Agent
+from google.adk.planners import BuiltInPlanner
 from google.adk.tools.google_search_tool import google_search
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
@@ -10,16 +11,11 @@ from shared.config import STRICT_SAFETY
 
 load_dotenv()
 
-MODEL = os.getenv("MODEL_NAME", "gemini-2.5-pro")
+MODEL = os.getenv("MODEL_NAME_FLASH", "gemini-2.5-flash")
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION")
 
-# Define the Researcher Agent
-researcher = Agent(
-    name="researcher",
-    model=MODEL,
-    description="Gathers fairy-tale lore and physical activity ideas for children.",
-    instruction="""
+researcher_instruction = """
     # Your Identity
     You are the 'Adventure Seeker' for Gemini Tales, a world-class scout with expertise in child pedagogy and interactive outdoor exploration. 
 
@@ -53,7 +49,20 @@ researcher = Agent(
     **When research is called 'too passive':** 
     User: "Feedback: This is just facts. Add movement." 
     You: "I will refine the search. I found that ancient Egyptians used boats on the Nile. **Magic Task:** Sit on the floor and pretend to row a big wooden boat for 20 seconds! Pull those oars hard!"
-    """,
+    """
+
+# Define the Researcher Agent
+researcher = Agent(
+    name="researcher",
+    model=MODEL,
+    planner=BuiltInPlanner(
+        thinking_config=types.ThinkingConfig(
+            include_thoughts=True, 
+            thinking_budget=1024 
+        )
+    ),
+    description="Gathers fairy-tale lore and physical activity ideas for children.",
+    instruction=researcher_instruction,
     tools=[google_search],
     generate_content_config=types.GenerateContentConfig(
         temperature=0.7,

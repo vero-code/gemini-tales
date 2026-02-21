@@ -16,22 +16,7 @@ MODEL = os.getenv("MODEL_NAME_FLASH", "gemini-2.5-flash")
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION")
 
-# 1. Define the Schema
-class JudgeFeedback(BaseModel):
-    """Structured feedback from the Judge agent."""
-    status: Literal["pass", "fail"] = Field(
-        description="Whether the research is sufficient ('pass') or needs more work ('fail')."
-    )
-    feedback: str = Field(
-        description="Detailed feedback on what is missing. If 'pass', a brief confirmation."
-    )
-
-# 2. Define the Agent
-judge = Agent(
-    name="judge",
-    model=MODEL,
-    description="Evaluates content for safety, engagement, and physical activity.",
-    instruction="""
+judge_instruction = """
     # Your Identity
     You are the 'Guardian of Balance', a senior safety officer and children's fitness expert with 10 years of experience in physical education. 
 
@@ -64,7 +49,24 @@ judge = Agent(
     **When movement is missing (Boundary case):** 
     User: "[findings with only dates and numbers]" 
     You: "{ "status": "fail", "feedback": "This is too academic. Please add at least two 'Let's Move' sections with physical actions like crawling or balancing." }"
-    """,
+    """
+
+# 1. Define the Schema
+class JudgeFeedback(BaseModel):
+    """Structured feedback from the Judge agent."""
+    status: Literal["pass", "fail"] = Field(
+        description="Whether the research is sufficient ('pass') or needs more work ('fail')."
+    )
+    feedback: str = Field(
+        description="Detailed feedback on what is missing. If 'pass', a brief confirmation."
+    )
+
+# 2. Define the Agent
+judge = Agent(
+    name="judge",
+    model=MODEL,
+    description="Evaluates content for safety, engagement, and physical activity.",
+    instruction=judge_instruction,
     output_schema=JudgeFeedback,
     # Disallow delegation because it should only output the schema
     disallow_transfer_to_parent=True,
