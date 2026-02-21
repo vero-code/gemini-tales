@@ -376,3 +376,47 @@ body {
     font-family: 'Inter', sans-serif;
     padding: 48px 0;
 }
+
+/* --- Sources Section --- */
+.sources-section {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 2px dashed #e2e8f0;
+}
+
+.sources-divider {
+    margin-top: 40px;
+    border-top: 2px dashed #e2e8f0;
+    padding-top: 20px;
+}
+
+.sources-title {
+    font-weight: 600;
+    color: #64748b;
+    font-size: 0.9rem;
+    margin-bottom: 12px;
+}
+
+.sources-list {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.source-link {
+    display: inline-block;
+    background: #f1f5f9;
+    color: #475569;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.source-link:hover {
+    background: #4285F4;
+    color: white;
+}

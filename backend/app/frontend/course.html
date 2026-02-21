@@ -35,6 +35,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const courseData = localStorage.getItem('currentCourse');
+            const sourcesData = JSON.parse(localStorage.getItem('currentSources') || '[]');
             if (!courseData) {
                 window.location.href = '/';
                 return;
@@ -45,6 +46,21 @@
             
             // Render Markdown
             contentContainer.innerHTML = marked.parse(courseData);
+
+            // Add sources section
+            if (sourcesData.length > 0) {
+                const sourcesDiv = document.createElement('div');
+                sourcesDiv.className = 'sources-section';
+                const linksHtml = sourcesData.map((url, index) => 
+                    `<li><a href="${url}" target="_blank" class="source-link">Source [${index + 1}]</a></li>`
+                ).join('');
+                sourcesDiv.innerHTML = `
+                    <div class="sources-divider"></div>
+                    <p class="sources-title">✨ Adventure verified by Google Search:</p>
+                    <ul class="sources-list">${linksHtml}</ul>
+                `;
+                contentContainer.appendChild(sourcesDiv);
+            }
             
             // Generate TOC from h2 elements
             const headings = contentContainer.querySelectorAll('h2');

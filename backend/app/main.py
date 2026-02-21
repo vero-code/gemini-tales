@@ -182,22 +182,33 @@ async def chat_stream(request: SimpleChatRequest):
 
     async def event_generator():
         final_text = ""
+        sources = [] # List for storing links
         async for event in events:
+            if event["author"] == "researcher" and "groundingMetadata" in event:
+                metadata = event["groundingMetadata"]
+                if "groundingChunks" in metadata:
+                    for chunk in metadata["groundingChunks"]:
+                        if "web" in chunk and "uri" in chunk["web"]:
+                            sources.append(chunk["web"]["uri"])
+                yield json.dumps({"type": "progress", "text": "🔍 Researcher found sources..."}) + "\n"
+
             # Send progress updates based on which agent is active
             if event["author"] == "researcher":
                  yield json.dumps({"type": "progress", "text": "🔍 Researcher is gathering information..."}) + "\n"
             elif event["author"] == "judge":
                  yield json.dumps({"type": "progress", "text": "⚖️ Judge is evaluating findings..."}) + "\n"
             elif event["author"] == "content_builder":
-                 yield json.dumps({"type": "progress", "text": "✍️ Content Builder is writing the course..."}) + "\n"
+                 yield json.dumps({"type": "progress", "text": "✍️ Content Builder is writing the story..."}) + "\n"
             # Accumulate final text
             if "content" in event and event["content"]:
                 content = genai_types.Content.model_validate(event["content"])
                 for part in content.parts: # type: ignore
                     if part.text:
                         final_text += part.text
+        
+        unique_sources = list(set(sources))
         # Send final result
-        yield json.dumps({"type": "result", "text": final_text.strip()}) + "\n"
+        yield json.dumps({"type": "result", "text": final_text.strip(), "sources": unique_sources}) + "\n"
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
