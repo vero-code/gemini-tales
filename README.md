@@ -3,7 +3,7 @@
 ![Status](https://img.shields.io/badge/status-active%20development-orange?style=flat-square)
 ![Hackathon](https://img.shields.io/badge/hackathon-Gemini%20Live%20Agent%20Challenge-4285F4?style=flat-square&logo=google)
 ![IDE](https://img.shields.io/badge/IDE-Google%20Antigravity-673AB7?style=flat-square&logo=googlecloud)
-![Version](https://img.shields.io/badge/version-v0.3.0-green?style=flat-square)
+![Version](https://img.shields.io/badge/version-v0.4.0-green?style=flat-square)
 
 > **Turning screen time into active adventure — A magical AI storyteller that sees, hears, and moves with your child.**
 
@@ -28,7 +28,7 @@ The frontend is a direct bridge to **Gemini 2.5 Flash Native Audio**, allowing f
 
 Our backend uses the **Google Agent Development Kit (ADK)** and the **A2A (Agent-to-Agent) protocol**, following the methodology of the [**"Optimize Agent Behavior"**](https://www.skills.google/paths/3545/course_templates/1564) course.
 
-### 🎭 Meet the Agents (Optimized Workflow v0.3.0)
+### 🎭 Meet the Agents (Optimized Workflow v0.4.0)
 
 Each agent is engineered using the **5-pattern prompt architecture** (Identity, Mission, Methodology, Boundaries, and Few-shot Examples) to ensure maximum role-adherence and reliability.
 
@@ -86,19 +86,30 @@ For a detailed deep-dive into the system design, component responsibilities, and
 - **[uv](https://docs.astral.sh/uv/)** for lightning-fast backend management.
 - **Google Cloud Project** with Vertex AI enabled.
 
-### 1. Backend Launch (v0.3.0)
-The backend runs five distributed services: the App, three specialized agents, and an orchestrator.
+### 1. Backend Launch (v0.4.0)
+The backend runs five distributed services natively from the root: the App, three specialized agents, and an orchestrator.
+
+#### **Easy Mode (Windows)**
+Run the automated startup script from the project root:
+```powershell
+.\run_local.ps1
+```
+
+#### **Manual Launcher**
+If you prefer manual control, use `uv` directly from the root:
 
 ```bash
-cd backend
-cp .env.example .env
 # Configure project ID and location
+cp .env.example .env 
 uv sync
-# Runs Researcher (8001), Judge (8002), Builder (8003), Orchestrator (8004), and App (8000)
+
+# Start leaf agents
 uv run shared/adk_app.py agents/researcher --host 0.0.0.0 --port 8001 --a2a
 uv run shared/adk_app.py agents/judge --host 0.0.0.0 --port 8002 --a2a
-uv run shared/adk_app.py agents/builder --host 0.0.0.0 --port 8003 --a2a
-uv run shared/adk_app.py agents/orchestrator --host 0.0.0.0 --port 8004 --a2a
+uv run shared/adk_app.py agents/content_builder --host 0.0.0.0 --port 8003 --a2a
+
+# Start orchestrator and gateway
+uv run shared/adk_app.py agents/orchestrator --host 0.0.0.0 --port 8004
 uv run app/main.py
 ```
 
