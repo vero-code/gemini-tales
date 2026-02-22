@@ -95,7 +95,7 @@ try {
     $ORCHESTRATOR_URL = (gcloud run services describe orchestrator --region $REGION --format='value(status.url)')
 
     Write-Host "`n--- Deploying Frontend (App) ---" -ForegroundColor Cyan
-    gcloud run deploy course-creator `
+    gcloud run deploy gemini-tales `
         --source "app" `
         --project $GOOGLE_CLOUD_PROJECT `
         --region $REGION `
@@ -104,7 +104,7 @@ try {
         --set-env-vars GOOGLE_CLOUD_PROJECT="$GOOGLE_CLOUD_PROJECT"
 
     Write-Host "`nDEPLOYMENT COMPLETE!" -ForegroundColor Green
-    Write-Host "Frontend URL: $(gcloud run services describe course-creator --region $REGION --format='value(status.url)')"
+    Write-Host "Frontend URL: $(gcloud run services describe gemini-tales --region $REGION --format='value(status.url)')"
 }
 finally {
     Write-Host "`nCleaning up shared files..."

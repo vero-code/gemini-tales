@@ -12,13 +12,13 @@ WORKDIR /app
 
 # Install dependencies first for better caching
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project --no-dev
+RUN uv sync --no-install-project --no-dev
 
 # Copy the rest of the application
-COPY . /app
+COPY . .
 
 # Final sync to install the project
-RUN uv sync --frozen --no-dev
+RUN uv sync --no-install-project --no-dev
 
 # Set host and port
 ENV HOST 0.0.0.0

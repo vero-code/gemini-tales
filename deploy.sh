@@ -86,7 +86,7 @@ gcloud run deploy orchestrator \
   --set-env-vars GOOGLE_GENAI_USE_VERTEXAI="true"
 ORCHESTRATOR_URL=$(gcloud run services describe orchestrator --region $REGION --format='value(status.url)')
 
-gcloud run deploy course-creator \
+gcloud run deploy gemini-tales \
   --source app \
   --project $GOOGLE_CLOUD_PROJECT \
   --region $REGION \
