@@ -60,6 +60,8 @@ The agents communicate over A2A in a loop to ensure high-quality output:
 3.  If it fails (too boring/passive), the Seeker gets specific feedback and tries again.
 4.  Once approved, the **Storysmith** crafts the final interactive script.
 
+![ADK Web Trace](assets/adk-web-trace.png)
+
 ### 🛠️ Key Optimization Techniques Applied
 
 -   **Full 5-Pattern Prompting**: Agent instructions include **Few-shot examples** to ensure predictable narrative and logic flows.
