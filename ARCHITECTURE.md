@@ -15,14 +15,14 @@
    - [Tool-call Protocol](#34-tool-call-protocol)
    - [Audio Pipeline](#35-audio-pipeline)
    - [Camera Pipeline](#36-camera-pipeline)
-4. [Subsystem B — Multi-agent Course Creator (Backend)](#4-subsystem-b--multi-agent-course-creator-backend)
+4. [Subsystem B — Multi-agent Story Engine (Backend)](#4-subsystem-b--multi-agent-story-engine-backend)
    - [Agent Roles](#41-agent-roles)
    - [Orchestration Logic](#42-orchestration-logic)
    - [A2A Communication](#43-a2a-communication)
    - [FastAPI Proxy Layer](#44-fastapi-proxy-layer)
 5. [Data Flows](#5-data-flows)
    - [Live Storytelling End-to-End](#51-live-storytelling-end-to-end)
-   - [Multi-agent Course Creation End-to-End](#52-multi-agent-course-creation-end-to-end)
+   - [Multi-agent Story Engine End-to-End](#52-multi-agent-story-engine-end-to-end)
 6. [Service Topology & Ports](#6-service-topology--ports)
 7. [Deployment](#7-deployment)
 8. [Key Design Decisions](#8-key-design-decisions)
@@ -37,22 +37,21 @@ Gemini Tales consists of **two independent subsystems** that share a common Goog
 | Subsystem | Where it runs | Primary API |
 |---|---|---|
 | **Live Storytelling** | Browser (React/Vite) | Gemini Live API (WebSocket) |
-| **Multi-agent Course Creator** | Server (Python/FastAPI) | Gemini via Google ADK + A2A |
+| **Story Engine** | Server (Python/FastAPI) | Gemini via Google ADK + A2A |
 
-The two subsystems are deployed together: the FastAPI server serves the compiled frontend as static files, and exposes a `/api/chat_stream` endpoint for the course-creator UI.
+The two subsystems are deployed together: the FastAPI server serves the compiled frontend as static files, and exposes a `/api/chat_stream` endpoint for the Story Engine UI.
 
-```
 Browser
   ├── Live Storytelling (WebSocket → Gemini Live API)   [direct, no backend]
-  └── Course Creator UI (HTTP → FastAPI → ADK Agents)
+  └── Story Engine UI (HTTP → FastAPI → ADK Agents)
 
 Server (Cloud Run / localhost)
   ├── FastAPI app (port 8000)
   ├── Orchestrator (port 8004)
-  ├── Researcher   (port 8001)
-  ├── Judge        (port 8002)
-  └── Content Builder (port 8003)
-```
+  ├── Adventure Seeker (Researcher - 8001)
+  ├── Guardian of Balance (Judge - 8002)
+  └── Storysmith (Content Builder - 8003)
+
 
 ---
 
@@ -213,29 +212,29 @@ Frames are sent at **320×240 @ JPEG q=0.5** to keep bandwidth low while giving 
 
 ---
 
-## 4. Subsystem B — Multi-agent Course Creator (Backend)
+## 4. Subsystem B — Multi-agent Story Engine (Backend)
 
 ### 4.1 Agent Roles
 
 | Agent | Model | Key tools / output | ADK type |
 |---|---|---|---|
-| **Researcher** | `gemini-2.5-pro` | `google_search` | `Agent` |
-| **Judge** | `gemini-2.5-pro` | Structured `JudgeFeedback` (`{ status, feedback }`) | `Agent` with `output_schema` |
-| **Content Builder** | `gemini-2.5-pro` | Markdown course | `Agent` |
+| **Adventure Seeker** (Researcher) | `gemini-2.5-flash` | `google_search` + `BuiltInPlanner` | `Agent` |
+| **Guardian of Balance** (Judge) | `gemini-2.5-flash` | Structured `JudgeFeedback` (`{ status, feedback }`) | `Agent` with `output_schema` |
+| **Storysmith** (Content Builder) | `gemini-2.5-pro` | Markdown Interactive Story | `Agent` |
 | **Orchestrator** | — | Coordinates the pipeline | `SequentialAgent` + `LoopAgent` |
 
 ### 4.2 Orchestration Logic
 
 ```
-course_creation_pipeline (SequentialAgent)
+story_engine_pipeline (SequentialAgent)
   └─► research_loop (LoopAgent, max_iterations=3)
-  │     ├─► researcher        → saves output to state["research_findings"]
-  │     ├─► judge             → saves JudgeFeedback to state["judge_feedback"]
+  │     ├─► adventure_seeker  → saves output to state["research_findings"]
+  │     ├─► guardian_of_balance → saves JudgeFeedback to state["judge_feedback"]
   │     └─► escalation_checker (BaseAgent)
   │           ├─► feedback.status == "pass"  → EventActions(escalate=True)  ← exits loop
   │           └─► feedback.status == "fail"  → loop again (up to 3 times)
   │
-  └─► content_builder         → reads state["research_findings"], outputs markdown course
+  └─► storysmith              → reads state["research_findings"], outputs markdown story
 ```
 
 **EscalationChecker** is a custom `BaseAgent` subclass. It reads `session.state["judge_feedback"]` and yields an `Event(escalate=True)` to break the `LoopAgent`, or an empty event to continue.
@@ -250,9 +249,9 @@ Each of the three leaf agents (Researcher, Judge, Content Builder) runs as a sta
 
 ```
 Orchestrator
-  ├── RemoteA2aAgent("researcher")  → HTTP POST  http://localhost:8001/a2a/...
-  ├── RemoteA2aAgent("judge")       → HTTP POST  http://localhost:8002/a2a/...
-  └── RemoteA2aAgent("content_builder") → HTTP POST  http://localhost:8003/a2a/...
+  ├── RemoteA2aAgent("researcher")  → HTTP POST  http://localhost:8001/a2a/... (Adventure Seeker)
+  ├── RemoteA2aAgent("judge")       → HTTP POST  http://localhost:8002/a2a/... (Guardian of Balance)
+  └── RemoteA2aAgent("content_builder") → HTTP POST  http://localhost:8003/a2a/... (Storysmith)
 ```
 
 ### 4.4 FastAPI Proxy Layer
@@ -267,10 +266,10 @@ Browser POST /api/chat_stream
         │    └─► create_session() (otherwise create a new one)
         └─► query_adk_server()    (SSE stream from orchestrator /run_sse)
               └─► event_generator()
-                    ├─► "researcher" event  → yield progress: "🔍 Researcher is gathering..."
-                    ├─► "judge" event       → yield progress: "⚖️ Judge is evaluating..."
-                    ├─► "content_builder"   → yield progress: "✍️ Content Builder is writing..."
-                    └─► final content       → yield result: <markdown course>
+                    ├─► "researcher" event  → yield progress: "🔍 Adventure Seeker is gathering..."
+                    ├─► "judge" event       → yield progress: "⚖️ Guardian of Balance is evaluating..."
+                    ├─► "content_builder"   → yield progress: "✍️ Storysmith is writing..."
+                    └─► final content       → yield result: <markdown story>
 
 Response: application/x-ndjson (newline-delimited JSON)
 ```
@@ -303,7 +302,7 @@ All communication with the ADK server is done via `httpx_sse.aconnect_sse` for r
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 5.2 Multi-agent Course Creation End-to-End
+### 5.2 Multi-agent Story Engine End-to-End {#52-multi-agent-story-engine-end-to-end}
 
 ```
 User types topic
@@ -317,20 +316,20 @@ FastAPI (port 8000)
   └─► SSE stream from Orchestrator (port 8004)
         │
         ├── LoopAgent starts:
-        │   ├─► Researcher (8001) — google_search → research_findings (state)
-        │   ├─► Judge (8002)      — evaluate research → judge_feedback (state)
+        │   ├─► Adventure Seeker (8001) — google_search → research_findings (state)
+        │   ├─► Guardian of Balance (8002) — evaluate research → judge_feedback (state)
         │   └─► EscalationChecker
         │         ├── FAIL → loop (max 3×)
         │         └── PASS → escalate, exit loop
         │
-        └── Content Builder (8003) — reads research_findings → markdown course
+        └── Storysmith (8003) — reads research_findings → markdown story
               │
               ▼
         FastAPI streams NDJSON to browser:
-          { type: "progress", text: "🔍 Researcher is gathering..." }
-          { type: "progress", text: "⚖️ Judge is evaluating..." }
-          { type: "progress", text: "✍️ Content Builder is writing..." }
-          { type: "result",   text: "# Course Title\n## Section..." }
+          { type: "progress", text: "🔍 Adventure Seeker is gathering..." }
+          { type: "progress", text: "⚖️ Guardian of Balance is evaluating..." }
+          { type: "progress", text: "✍️ Storysmith is writing..." }
+          { type: "result",   text: "# Story Title\n## Chapter..." }
 ```
 
 ---
@@ -340,9 +339,9 @@ FastAPI (port 8000)
 | Service | Port | Technology | Start command |
 |---|---|---|---|
 | **App** (Frontend + API proxy) | `8000` | FastAPI + Uvicorn | `uvicorn main:app` |
-| **Researcher Agent** | `8001` | ADK A2A server | `adk_app.py --a2a` |
-| **Judge Agent** | `8002` | ADK A2A server | `adk_app.py --a2a` |
-| **Content Builder Agent** | `8003` | ADK A2A server | `adk_app.py --a2a` |
+| **Adventure Seeker** (Researcher) | `8001` | ADK A2A server | `adk_app.py --a2a` |
+| **Guardian of Balance** (Judge) | `8002` | ADK A2A server | `adk_app.py --a2a` |
+| **Storysmith** (Builder) | `8003` | ADK A2A server | `adk_app.py --a2a` |
 | **Orchestrator Agent** | `8004` | ADK server (non-A2A) | `adk_app.py` |
 
 All services are started in the correct order by `run_local.sh`. A 5-second sleep ensures leaf agents are ready before the orchestrator tries to resolve their agent cards.
@@ -355,9 +354,9 @@ All five services are containerised with individual `Dockerfile`s and deployed t
 
 **Deployment order** (enforced by the script):
 
-1. Researcher → deployed, URL captured
-2. Judge → deployed, URL captured
-3. Content Builder → deployed, URL captured
+1. Adventure Seeker → deployed, URL captured
+2. Guardian of Balance → deployed, URL captured
+3. Storysmith → deployed, URL captured
 4. Orchestrator → deployed (receives agent URLs as env vars), URL captured
 5. App → deployed (receives orchestrator URL as `AGENT_SERVER_URL`)
 
@@ -395,7 +394,9 @@ The Orchestrator saves agent outputs (`research_findings`, `judge_feedback`) int
 |---|---|---|
 | Live AI | Gemini 2.5 Flash Native Audio | `gemini-2.5-flash-native-audio-preview-12-2025` |
 | Image AI | Gemini 2.5 Flash Image | `gemini-2.5-flash-image` |
-| Research AI | Gemini 2.5 Pro | `gemini-2.5-pro` |
+| Adventure Seeker / Researcher | Gemini 2.5 Flash | `gemini-2.5-flash` |
+| Guardian of Balance / Judge | Gemini 2.5 Flash | `gemini-2.5-flash` |
+| Storysmith / Story Builder | Gemini 2.5 Pro | `gemini-2.5-pro` |
 | Multi-agent framework | Google Agent Development Kit (ADK) | `1.22.0` |
 | Agent protocol | A2A (Agent-to-Agent) | `a2a-sdk 0.3.*` |
 | Frontend | React 19 + TypeScript | — |

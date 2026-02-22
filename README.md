@@ -76,7 +76,7 @@ The agents communicate over A2A in a loop to ensure high-quality output:
 
 ## 🏗️ Architecture
 
----
+For a detailed deep-dive into the system design, component responsibilities, and data flows, please refer to the [**ARCHITECTURE.md**](./ARCHITECTURE.md) document.
 
 ## 🚀 Getting Started
 
