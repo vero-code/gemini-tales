@@ -1,8 +1,0 @@
-{
-  "name": "Gemini Tales",
-  "description": "An interactive AI storyteller that tells magical stories, generates real-time illustrations, and interacts with kids through voice and motion detection.",
-  "requestFramePermissions": [
-    "camera",
-    "microphone"
-  ]
-}
