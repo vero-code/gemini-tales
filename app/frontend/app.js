@@ -75,7 +75,7 @@ createForm.addEventListener('submit', async (e) => {
                         // Save result and redirect
                         localStorage.setItem('currentCourse', data.text);
                         localStorage.setItem('renderedContent', data.rendered_content || '');
-                        window.location.href = '/course.html';
+                        window.location.href = '/story.html';
                         return;
                     }
                 } catch (e) {
