@@ -70,31 +70,30 @@ gemini-tales/
 │       └── services/
 │           └── audioUtils.ts       # PCM encode / decode / AudioBuffer helpers
 │
-└── backend/
-    ├── pyproject.toml              # Root workspace manifest (uv)
-    ├── run_local.sh                # Starts all 5 services locally
-    ├── deploy.sh                   # Deploys all 5 services to Cloud Run
-    ├── shared/                     # Shared utilities (authenticated_httpx)
-    │
-    ├── agents/
-    │   ├── researcher/
-    │   │   ├── agent.py            # ADK Agent with google_search tool (gemini-2.5-pro)
-    │   │   └── Dockerfile
-    │   ├── judge/
-    │   │   ├── agent.py            # ADK Agent with structured JudgeFeedback output schema
-    │   │   └── Dockerfile
-    │   ├── content_builder/
-    │   │   ├── agent.py            # ADK Agent — writes the final course markdown
-    │   │   └── Dockerfile
-    │   └── orchestrator/
-    │       ├── agent.py            # SequentialAgent + LoopAgent + EscalationChecker
-    │       └── Dockerfile
-    │
-    └── app/
-        ├── main.py                 # FastAPI server — proxy to orchestrator + static files
-        ├── authenticated_httpx.py  # Google-auth aware httpx client factory
-        ├── Dockerfile
-        └── frontend/               # Compiled Vite build (copied here before deploy)
+├── pyproject.toml              # Root workspace manifest (uv)
+├── run_local.ps1               # Starts all 5 services locally
+├── deploy.sh                   # Deploys all 5 services to Cloud Run
+├── shared/                     # Shared utilities (authenticated_httpx)
+│
+├── agents/
+│   ├── researcher/
+│   │   ├── agent.py            # ADK Agent with google_search tool (gemini-2.5-pro)
+│   │   └── Dockerfile
+│   ├── judge/
+│   │   ├── agent.py            # ADK Agent with structured JudgeFeedback output schema
+│   │   └── Dockerfile
+│   ├── content_builder/
+│   │   ├── agent.py            # ADK Agent — writes the final course markdown
+│   │   └── Dockerfile
+│   └── orchestrator/
+│       ├── agent.py            # SequentialAgent + LoopAgent + EscalationChecker
+│       └── Dockerfile
+│
+└── app/
+    ├── main.py                 # FastAPI server — proxy to orchestrator + static files
+    ├── authenticated_httpx.py  # Google-auth aware httpx client factory
+    ├── Dockerfile
+    └── frontend/               # Compiled Vite build (copied here before deploy)
 ```
 
 ---

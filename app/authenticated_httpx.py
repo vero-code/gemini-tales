@@ -1,4 +1,4 @@
-# backend/app/authenticated_httpx.py
+# app/authenticated_httpx.py
 import subprocess
 from urllib.parse import urlparse
 

@@ -1,4 +1,4 @@
-# Run from the backend/ directory: .\run_local.ps1
+# Run from the project root: .\run_local.ps1
 
 # 1. Port Cleanup
 Write-Host "--- Cleaning up ports 8000-8004 ---" -ForegroundColor Yellow
