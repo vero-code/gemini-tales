@@ -211,7 +211,7 @@ def main(
         from google.adk.apps import App
 
         loader = AgentLoader(agents_dir)
-        agents = loader.list_agents()
+        agents = [a for a in loader.list_agents() if a not in ["shared", "__pycache__", ".venv"]]
         if len(agents) == 0:
             agents = ["agent"]
         for agent_name in agents:

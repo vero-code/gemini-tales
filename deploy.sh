@@ -33,6 +33,15 @@ fi
 echo "Using project ${GOOGLE_CLOUD_PROJECT}."
 echo "Using compute region ${REGION}."
 
+# Cleanup function to be called on exit
+cleanup() {
+  echo "Cleaning up temporary files..."
+  for agent in researcher judge content_builder orchestrator; do
+    rm -f "agents/${agent}/adk_app.py" "agents/${agent}/a2a_utils.py"
+  done
+}
+trap cleanup EXIT
+
 # Pre-deployment: copy shared files to agents
 for agent in researcher judge content_builder orchestrator; do
   cp shared/adk_app.py shared/a2a_utils.py "agents/${agent}/"
@@ -85,7 +94,3 @@ gcloud run deploy course-creator \
   --set-env-vars AGENT_SERVER_URL=$ORCHESTRATOR_URL \
   --set-env-vars GOOGLE_CLOUD_PROJECT="${GOOGLE_CLOUD_PROJECT}"
 
-# Cleanup
-for agent in researcher judge content_builder orchestrator; do
-  rm "agents/${agent}/adk_app.py" "agents/${agent}/a2a_utils.py"
-done

@@ -18,22 +18,24 @@ set -e
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 cd "${SCRIPT_DIR}"
 
+ARGS=()
+
 if [[ "${SESSION_SERVICE_URI}" != "" ]]; then
-    SESSION_SERVICE_PARAMETER="--session_service_uri ${SESSION_SERVICE_URI}"
+    ARGS+=("--session_service_uri" "${SESSION_SERVICE_URI}")
 elif [[ "${AGENT_ENGINE_ID}" != "" ]]; then
-    SESSION_SERVICE_PARAMETER="--session_service_uri agentengine://${AGENT_ENGINE_ID}"
+    ARGS+=("--session_service_uri" "agentengine://${AGENT_ENGINE_ID}")
 fi
 
 if [[ "${MEMORY_SERVICE_URI}" != "" ]]; then
-    MEMORY_SERVICE_PARAMETER="--memory_service_uri ${MEMORY_SERVICE_URI}"
+    ARGS+=("--memory_service_uri" "${MEMORY_SERVICE_URI}")
 elif [[ "${AGENT_ENGINE_ID}" != "" ]]; then
-    MEMORY_SERVICE_PARAMETER="--memory_service_uri agentengine://${AGENT_ENGINE_ID}"
+    ARGS+=("--memory_service_uri" "agentengine://${AGENT_ENGINE_ID}")
 fi
 
 if [[ "${ARTIFACT_SERVICE_URI}" != "" ]]; then
-    ARTIFACT_SERVICE_PARAMETER="--artifact_service_uri ${ARTIFACT_SERVICE_URI}"
+    ARGS+=("--artifact_service_uri" "${ARTIFACT_SERVICE_URI}")
 elif [[ "${ARTIFACTS_BUCKET}" != "" ]]; then
-    ARTIFACT_SERVICE_PARAMETER="--artifact_service_uri gs://${ARTIFACTS_BUCKET}"
+    ARGS+=("--artifact_service_uri" "gs://${ARTIFACTS_BUCKET}")
 fi
 
 if [[ "${PORT}" == "" ]]; then
@@ -44,10 +46,9 @@ if [[ "${ADDITIONAL_ADK_PARAMETERS}" != "" ]]; then
     echo "Additional parameters: ${ADDITIONAL_ADK_PARAMETERS}"
 fi
 
-python3 adk_app.py --host "0.0.0.0" --port ${PORT} \
+exec python3 adk_app.py --host "0.0.0.0" --port "${PORT}" \
     --trace_to_cloud \
-    ${SESSION_SERVICE_PARAMETER} \
-    ${MEMORY_SERVICE_PARAMETER} \
-    ${ARTIFACT_SERVICE_PARAMETER} \
+    "${ARGS[@]}" \
     ${ADDITIONAL_ADK_PARAMETERS} \
     .
+

@@ -3,31 +3,27 @@ FROM python:3.12-slim
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Install the project into /app
-COPY . /app
-WORKDIR /app
-
-# Allow statements and log messages to immediately appear in the logs
+# Prepare virtual environment path
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 
-# Prepare virtual environment path
-ENV VIRTUAL_ENV=/opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+WORKDIR /app
 
-# Install dependencies
-RUN uv venv /opt/venv && \
-    . /opt/venv/bin/activate && \
-    if [ -f pyproject.toml ]; then \
-        uv sync --active; \
-    elif [ -f requirements.txt ]; then \
-        uv pip install -U -r requirements.txt; \
-    else \
-        echo "Neither pyproject.toml nor requirements.txt found" && exit 1; \
-    fi
+# Install dependencies first for better caching
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project --no-dev
+
+# Copy the rest of the application
+COPY . /app
+
+# Final sync to install the project
+RUN uv sync --frozen --no-dev
 
 # Set host and port
 ENV HOST 0.0.0.0
-EXPOSE $PORT
+# Cloud Run expects 8080
+EXPOSE 8080
 
-# Run ADK API Server
-CMD ["./run.sh"]
+# Use 'uv run' to guarantee the correct environment is active
+CMD ["uv", "run", "adk_app.py", "--host", "0.0.0.0", "--port", "8080", "--trace_to_cloud", "--a2a", "."]
