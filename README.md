@@ -3,7 +3,8 @@
 ![Status](https://img.shields.io/badge/status-active%20development-orange?style=flat-square)
 ![Hackathon](https://img.shields.io/badge/hackathon-Gemini%20Live%20Agent%20Challenge-4285F4?style=flat-square&logo=google)
 ![IDE](https://img.shields.io/badge/IDE-Google%20Antigravity-673AB7?style=flat-square&logo=googlecloud)
-![Version](https://img.shields.io/badge/version-v0.4.0-green?style=flat-square)
+![Cloud](https://img.shields.io/badge/deployed-Cloud%20Run-blue?style=flat-square&logo=googlecloud)
+![Version](https://img.shields.io/badge/version-v1.0.0-green?style=flat-square)
 
 > **Turning screen time into active adventure — A magical AI storyteller that sees, hears, and moves with your child.**
 
@@ -92,10 +93,18 @@ For a detailed deep-dive into the system design, component responsibilities, and
 The backend runs five distributed services natively from the root: the App, three specialized agents, and an orchestrator.
 
 #### **Easy Mode (Windows)**
-Run the automated startup script from the project root:
+The project includes a unified startup script that handles multi-service orchestration locally:
+
 ```powershell
+# Starts all 5 services with automatic cleanup
 .\run_local.ps1
 ```
+
+This script:
+- Synchronizes dependencies using `uv`.
+- Launches all agent microservices on their respective ports.
+- Starts the main API gateway.
+- Provides a graceful shutdown (Ctrl+C) that terminates all child processes.
 
 #### **Manual Launcher**
 If you prefer manual control, use `uv` directly from the root:
@@ -125,9 +134,38 @@ uv run app/main.py
 
 Open http://localhost:8000 in your browser.
 
+### 2. Deployment to Cloud Run (v1.0.0)
+
+Gemini Tales is fully optimized for **Google Cloud Run**, leveraging its serverless scale and secure service-to-service communication.
+
+#### **Automated Deployment (Recommended)**
+The fastest way to deploy all 5 services is to use the provided PowerShell script:
+
+```powershell
+# Deploy all agents, orchestrator, and frontend
+.\deploy.ps1
+```
+
+This script handles:
+- **Environment Management**: Loading your `.env` configuration.
+- **Dependency Preparation**: Copying shared logic and safety settings into each agent's build context.
+- **Service Mesh**: Dynamically linking researchers, judges, and builders to the orchestrator.
+- **Security**: Setting up authenticated internal communication and public frontend access.
+
+#### **Deployed Services Architecture**
+| Service | Access Level | Description |
+|---|---|---|
+| `gemini-tales` | **Public** | The main web frontend and A2A gateway. |
+| `orchestrator` | Private | The master controller for agent missions. |
+| `researcher` | Private | High-speed data gathering via Google Search. |
+| `judge` | Private | Content validation and safety enforcement. |
+| `content-builder` | Private | Narrative generation and story crafting. |
+
 ---
 
 ## 🛠️ Tech Stack
+
+-   **Cloud Infrastructure**: **Google Cloud Run**. Serverless hosting for high-availability and secure agentic microservices.
 
 -   **Intelligence & Reasoning**: **Gemini 2.5 Flash & Pro** via **Google AI Studio** & **Vertex AI (Google Cloud)**. Using Flash for speed/cost-efficiency and Pro for high-quality creative storytelling.
     
