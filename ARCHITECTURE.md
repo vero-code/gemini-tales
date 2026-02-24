@@ -32,17 +32,17 @@
 
 ## 1. High-level Overview
 
-Gemini Tales consists of **two independent subsystems** that share a common Google AI backbone:
+Gemini Tales is an integrated AI storytelling system built on the Google Agent Development Kit (ADK). It allows users to generate interactive stories based on any topic.
 
-| Subsystem | Where it runs | Primary API |
+| Component | Responsibility | Primary Technology |
 |---|---|---|
-| **Live Storytelling** | Browser (React/Vite) | Gemini Live API (WebSocket) |
-| **Story Engine** | Server (Python/FastAPI) | Gemini via Google ADK + A2A |
+| **Frontend** | Interactive UI for story generation and display | HTML5 / Vanilla JS / CSS3 |
+| **API Layer** | Proxy between UI and Agent Orchestrator | Python / FastAPI / Uvicorn |
+| **Story Engine** | Multi-agent pipeline for research and writing | Google ADK / A2A Protocol |
 
-The two subsystems are deployed together: the FastAPI server serves the compiled frontend as static files, and exposes a `/api/chat_stream` endpoint for the Story Engine UI.
+The system is deployed as a suite of microservices: a main FastAPI server serves the frontend and exposes the chat API, while four independent agents handle the processing logic.
 
-Browser
-  ├── Live Storytelling (WebSocket → Gemini Live API)   [direct, no backend]
+User Browser
   └── Story Engine UI (HTTP → FastAPI → ADK Agents)
 
 Server (Cloud Run / localhost)
@@ -59,155 +59,60 @@ Server (Cloud Run / localhost)
 
 ```
 gemini-tales/
-├── frontend/                       # React 19 + Vite 6 + TypeScript
-│   ├── index.html
-│   ├── vite.config.ts
-│   ├── package.json
-│   └── src/
-│       ├── main.tsx                # React entry point
-│       ├── App.tsx                 # Entire Live storytelling app (single-component)
-│       ├── types.ts                # AppState enum, Achievement, StoryScene interfaces
-│       └── services/
-│           └── audioUtils.ts       # PCM encode / decode / AudioBuffer helpers
+├── app/                        # Main FastAPI Server & Frontend
+│   ├── main.py                 # API proxy logic & static file mounting
+│   ├── frontend/               # Vanilla JS source (index.html, app.js, style.css)
+│   ├── authenticated_httpx.py  # Google-auth client factory
+│   └── Dockerfile
 │
+├── agents/                     # ADK Agents (microservices)
+│   ├── researcher/             # Adventure Seeker (Search + Planning)
+│   ├── judge/                  # Guardian of Balance (Quality evaluation)
+│   ├── content_builder/        # Storysmith (Markdown generation)
+│   └── orchestrator/           # Pipeline logic (SequentialAgent + LoopAgent)
+│
+├── shared/                     # Shared utilities for agents
+│   ├── adk_app.py              # Common A2A server entry point
+│   ├── config.py               # Shared Gemini config (Safety settings)
+│   └── authenticated_httpx.py  # Shared auth client
+│
+├── assets/                     # UI Assets & Documentation images
 ├── pyproject.toml              # Root workspace manifest (uv)
 ├── run_local.ps1               # Starts all 5 services locally
-├── deploy.sh                   # Deploys all 5 services to Cloud Run
-├── shared/                     # Shared utilities (authenticated_httpx)
-│
-├── agents/
-│   ├── researcher/
-│   │   ├── agent.py            # ADK Agent with google_search tool (gemini-2.5-pro)
-│   │   └── Dockerfile
-│   ├── judge/
-│   │   ├── agent.py            # ADK Agent with structured JudgeFeedback output schema
-│   │   └── Dockerfile
-│   ├── content_builder/
-│   │   ├── agent.py            # ADK Agent — writes the final course markdown
-│   │   └── Dockerfile
-│   └── orchestrator/
-│       ├── agent.py            # SequentialAgent + LoopAgent + EscalationChecker
-│       └── Dockerfile
-│
-└── app/
-    ├── main.py                 # FastAPI server — proxy to orchestrator + static files
-    ├── authenticated_httpx.py  # Google-auth aware httpx client factory
-    ├── Dockerfile
-    └── frontend/               # Compiled Vite build (copied here before deploy)
+└── deploy.ps1                  # Deploys all 5 services to Cloud Run
 ```
 
 ---
 
-## 3. Subsystem A — Live Storytelling (Frontend)
+## 3. Subsystem A — Interactive Story UI (Frontend)
 
-The entire interactive experience lives in a **single React component** (`App.tsx`). It connects directly to the Gemini API from the browser — there is no backend involved in the storytelling path.
+The frontend is a lightweight, high-performance web interface built with pure HTML, CSS, and JavaScript. It communicates with the FastAPI backend via an NDJSON (Newline Delimited JSON) stream for real-time progress updates.
 
 ### 3.1 Component Map
 
 ```
-App.tsx
-  ├── State: AppState { IDLE → STARTING → STORYTELLING }
-  ├── Refs
-  │   ├── videoRef          — <video> element for camera preview
-  │   ├── canvasRef         — off-screen canvas for JPEG frame capture
-  │   ├── audioContextInRef — AudioContext @ 16 kHz  (microphone input)
-  │   ├── audioContextOutRef— AudioContext @ 24 kHz  (AI audio output)
-  │   ├── sourcesRef        — Set<AudioBufferSourceNode> (for interruption)
-  │   ├── nextStartTimeRef  — scheduled playback cursor
-  │   └── sessionPromiseRef — Promise<Session> (Live API handle)
-  │
-  ├── generateNewIllustration(prompt)   → Gemini Image API
-  ├── handleAwardBadge(badgeId)         → local state mutation
-  ├── selectChoice(choice)              → s.send({ text })
-  ├── handleSessionMessage(message)     → dispatches all server events
-  ├── startStory()                      → opens camera + Live session
-  └── stopStory()                       → cleans up all resources
+app/frontend/
+  ├── index.html   — Landing page with topic input
+  ├── story.html   — Dedicated viewer for the generated markdown story
+  ├── app.js       — Application logic (Form handling, SSE/NDJSON streaming)
+  └── style.css    — Modern, responsive design system (Glassmorphism inspired)
 ```
 
-### 3.2 State Machine
+### 3.2 State Management
 
-```
-IDLE
-  │  user clicks "Begin Your Story"
-  ▼
-STARTING  ←──────────────────────────────────┐
-  │  camera permission granted               │ camera error
-  │  Live API session connecting             │
-  ▼                                          │
-STORYTELLING ──────── onclose / stopStory() ─┘
-  │  all interactions happen here
-  ▼
-IDLE  (after stopStory)
-```
+The frontend uses `localStorage` to persist the generated story content between the generation phase (landing page) and the reading phase (display page).
 
-### 3.3 Live API Session Lifecycle
+1. **Generation State**: Tracked via DOM mutations in `app.js` (swapping form for progress bar).
+2. **Persistence**: `currentCourse` and `renderedContent` (Google Search HTML) are stored in `localStorage`.
 
-```
-startStory()
-  1. getUserMedia({ video: true, audio: true })
-  2. new AudioContext({ sampleRate: 16000 })   ← microphone
-  3. new AudioContext({ sampleRate: 24000 })   ← speaker
-  4. ai.live.connect(model, config, callbacks)
-       ├── onopen  → send initial "Start the magical fairy tale..." turn
-       │            connect ScriptProcessor for mic streaming
-       │            start setInterval (4 s) for camera frames
-       ├── onmessage → handleSessionMessage()
-       └── onclose → AppState.IDLE
+### 3.3 NDJSON Stream Protocol
 
-stopStory()
-  1. clearInterval (frame capture)
-  2. s.close()
-  3. stop all MediaStream tracks
-  4. reset state
-```
+The frontend uses the `Fetch API` and `ReadableStream` to parse the backend response line-by-line:
 
-### 3.4 Tool-call Protocol
-
-The AI can call three **function tools** during the session. The frontend handles them inside `handleSessionMessage → message.toolCall`:
-
-| Tool | Args | Frontend action | Response sent back |
-|---|---|---|---|
-| `generateIllustration` | `prompt: string` | Calls `generateNewIllustration(prompt)` → sets `currentIllustration` | `{ result: "Done" }` |
-| `awardBadge` | `badgeId: string` | Calls `handleAwardBadge(badgeId)` → unlocks achievement, shows popup | `{ result: "Awarded" }` |
-| `showChoice` | `options: string[]` | Sets `storyChoices` → renders overlay buttons | `{ result: "Options shown" }` |
-
-All tool responses are sent via `s.sendToolResponse()`.
-
-### 3.5 Audio Pipeline
-
-```
-Microphone (getUserMedia)
-  └─► MediaStreamSource
-        └─► ScriptProcessor (bufferSize: 4096, mono, 16 kHz)
-              └─► onaudioprocess
-                    └─► createPcmBlob(Float32Array)   [audioUtils.ts]
-                          └─► s.sendRealtimeInput({ media: blob })
-
-Gemini Live API Response (24 kHz PCM)
-  └─► message.serverContent.modelTurn.parts[0].inlineData.data  (base64)
-        └─► decode(base64)                           [audioUtils.ts]
-              └─► decodeAudioData(pcm, ctx, 24000, 1) [audioUtils.ts]
-                    └─► AudioBufferSourceNode.start(nextStartTime)
-                          └─► ctx.destination (speakers)
-
-Interruption:
-  message.serverContent.interrupted = true
-  └─► sourcesRef.forEach(s => s.stop())
-      nextStartTimeRef = 0
-```
-
-### 3.6 Camera Pipeline
-
-```
-setInterval(4000ms)
-  └─► canvas.drawImage(videoRef, 0, 0, 320, 240)
-        └─► canvas.toBlob('image/jpeg', quality=0.5)
-              └─► FileReader.readAsDataURL
-                    └─► base64 = result.split(',')[1]
-                          └─► s.sendRealtimeInput({ media: { data: base64, mimeType: 'image/jpeg' } })
-```
-
-Frames are sent at **320×240 @ JPEG q=0.5** to keep bandwidth low while giving the model enough visual context.
+| Event Type | Payload | Action |
+|---|---|---|
+| `progress` | `{ type: "progress", text: "..." }` | Updates the status label and highlights pipeline steps. |
+| `result`   | `{ type: "result", text: "...", rendered_content: "..." }` | Saves data and redirects to `story.html`. |
 
 ---
 
@@ -279,25 +184,17 @@ All communication with the ADK server is done via `httpx_sse.aconnect_sse` for r
 
 ## 5. Data Flows
 
-### 5.1 Live Storytelling End-to-End
+### 5.1 Main Generation Loop
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Child's Browser                                            │
+│  Browser (Frontend)                                         │
 │                                                             │
-│  Mic ──► PCM 16kHz ──► sendRealtimeInput ──────────────────┼──► Gemini Live API
-│                                                             │    (gemini-2.5-flash-
-│  Camera ──► JPEG 320×240 / 4s ──► sendRealtimeInput ───────┼──►  native-audio-preview)
+│  User Input (Topic) ──► POST /api/chat_stream ─────────────┼──► FastAPI (Proxy)
 │                                                             │         │
-│  AI Audio (PCM 24kHz) ◄─────────── modelTurn.inlineData ◄──┼─────────┤
-│  AI Text Transcript  ◄──────────── outputTranscription ◄───┼─────────┤
-│                                                             │         │
-│  toolCall: generateIllustration ◄───────────────────────────┼─────────┤
-│    └─► Gemini Image API (gemini-2.5-flash-image)            │         │
-│          └─► inlineData.data (PNG) → <img>                  │         │
-│                                                             │         │
-│  toolCall: awardBadge → achievement popup                   │         │
-│  toolCall: showChoice → overlay buttons → sendClientContent │─────────┘
+│  NDJSON Stream ◄────────────────────────────────────────────┼─────────┘
+│    ├─► type: "progress" → Update UI status                  │
+│    └─► type: "result"   → Save to localStorage & Redirect    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -343,13 +240,13 @@ FastAPI (port 8000)
 | **Storysmith** (Builder) | `8003` | ADK A2A server | `adk_app.py --a2a` |
 | **Orchestrator Agent** | `8004` | ADK server (non-A2A) | `adk_app.py` |
 
-All services are started in the correct order by `run_local.sh`. A 5-second sleep ensures leaf agents are ready before the orchestrator tries to resolve their agent cards.
+All services are started in the correct order by `run_local.ps1`. A 5-second sleep ensures leaf agents are ready before the orchestrator tries to resolve their agent cards.
 
 ---
 
 ## 7. Deployment
 
-All five services are containerised with individual `Dockerfile`s and deployed to **Google Cloud Run** via `deploy.sh`.
+All five services are containerised with individual `Dockerfile`s and deployed to **Google Cloud Run** via `deploy.ps1`.
 
 **Deployment order** (enforced by the script):
 
@@ -391,17 +288,12 @@ The Orchestrator saves agent outputs (`research_findings`, `judge_feedback`) int
 
 | Layer | Technology | Version |
 |---|---|---|
-| Live AI | Gemini 2.5 Flash Native Audio | `gemini-2.5-flash-native-audio-preview-12-2025` |
-| Image AI | Gemini 2.5 Flash Image | `gemini-2.5-flash-image` |
-| Adventure Seeker / Researcher | Gemini 2.5 Flash | `gemini-2.5-flash` |
-| Guardian of Balance / Judge | Gemini 2.5 Flash | `gemini-2.5-flash` |
-| Storysmith / Story Builder | Gemini 2.5 Pro | `gemini-2.5-pro` |
+| Large Language Model | Gemini 2.5 Flash / Pro | (Default: `gemini-2.5-flash`) |
 | Multi-agent framework | Google Agent Development Kit (ADK) | `1.22.0` |
 | Agent protocol | A2A (Agent-to-Agent) | `a2a-sdk 0.3.*` |
-| Frontend | React 19 + TypeScript | — |
-| Build tool | Vite 6 | — |
-| Styling | TailwindCSS | — |
+| Frontend | Vanilla HTML5 / JavaScript / CSS3 | — |
 | Backend | FastAPI + Uvicorn | `0.123.*` / `0.40.0` |
+| Async Streaming | NDJSON / Event-Driven | — |
 | Python | CPython | `≥ 3.10, < 3.14` |
 | Package manager | uv | — |
 | Observability | OpenTelemetry + Google Cloud Trace | `1.11.0` |
