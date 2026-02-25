@@ -7,7 +7,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 import httpx
 from httpx_sse import aconnect_sse
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -18,6 +18,7 @@ from opentelemetry.sdk.trace import TracerProvider, export
 from pydantic import BaseModel
 
 from authenticated_httpx import create_authenticated_client
+from narrator import narrator_ws_endpoint
 
 load_dotenv()
 
@@ -244,6 +245,11 @@ async def chat_stream(request: SimpleChatRequest):
         yield json.dumps({"type": "result", "text": final_text.strip(), "rendered_content": rendered_content}) + "\n"
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
+
+@app.websocket("/ws/narrator")
+async def narrator_endpoint(websocket: WebSocket):
+    """Live API narrator WebSocket – reads the story to the child."""
+    await narrator_ws_endpoint(websocket)
 
 # Mount frontend from the copied location
 frontend_path = os.path.join(os.path.dirname(__file__), "frontend")
