@@ -8,82 +8,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Merriweather:wght@300;400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <style>
-        /* ── Narrator Panel ── */
-        #narrator-panel {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 10px;
-            font-family: 'Inter', sans-serif;
-        }
-
-        #narrator-transcript {
-            background: rgba(15,23,42,0.92);
-            color: #e2e8f0;
-            border-radius: 16px;
-            padding: 14px 18px;
-            max-width: 340px;
-            max-height: 220px;
-            overflow-y: auto;
-            font-size: 0.85rem;
-            line-height: 1.6;
-            display: none;
-            backdrop-filter: blur(8px);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-        }
-
-        #narrator-transcript.visible { display: block; }
-
-        .transcript-line { margin-bottom: 6px; }
-        .transcript-line.user  { color: #93c5fd; }
-        .transcript-line.model { color: #d1fae5; }
-        .transcript-label { font-weight: 700; margin-right: 4px; }
-
-        #narrator-controls {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        #narrator-status {
-            font-size: 0.8rem;
-            color: #64748b;
-            max-width: 200px;
-            text-align: right;
-        }
-
-        #narrator-btn {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            border: none;
-            background: linear-gradient(135deg, #2563eb, #7c3aed);
-            color: white;
-            font-size: 1.6rem;
-            cursor: pointer;
-            box-shadow: 0 4px 20px rgba(37,99,235,0.4);
-            transition: transform 0.2s, box-shadow 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #narrator-btn:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(37,99,235,0.55); }
-        #narrator-btn.active {
-            background: linear-gradient(135deg, #dc2626, #9f1239);
-            animation: pulse-ring 1.5s infinite;
-        }
-        @keyframes pulse-ring {
-            0%   { box-shadow: 0 0 0 0 rgba(220,38,38,0.5); }
-            70%  { box-shadow: 0 0 0 14px rgba(220,38,38,0); }
-            100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); }
-        }
-    </style>
 </head>
 <body class="course-page">
     <div class="course-container">
@@ -105,15 +29,6 @@
                     <div class="loading-course">Loading your story...</div>
                 </article>
             </main>
-        </div>
-    </div>
-
-    <!-- ── Narrator Panel ── -->
-    <div id="narrator-panel">
-        <div id="narrator-transcript"></div>
-        <div id="narrator-controls">
-            <div id="narrator-status">Click 📖 to listen to the narrator</div>
-            <button id="narrator-btn" title="Talk to Narrator">📖</button>
         </div>
     </div>
 
@@ -258,62 +173,6 @@
                 });
             }
         });
-    </script>
-    <script src="live-narrator.js"></script>
-    <script>
-        (() => {
-            const btn    = document.getElementById('narrator-btn');
-            const status = document.getElementById('narrator-status');
-            const log    = document.getElementById('narrator-transcript');
-
-            let narrator = null;
-            let running  = false;
-
-            function appendTranscript(role, text) {
-                const line = document.createElement('div');
-                line.className = `transcript-line ${role}`;
-                const label = role === 'user' ? '🧒 You:' : '📖 Narrator:';
-                line.innerHTML = `<span class="transcript-label">${label}</span>${text}`;
-                log.appendChild(line);
-                log.scrollTop = log.scrollHeight;
-                log.classList.add('visible');
-            }
-
-            async function startNarrator() {
-                const story = localStorage.getItem('currentCourse');
-                if (!story) { status.textContent = 'No story found.'; return; }
-
-                narrator = new LiveNarrator(story);
-
-                narrator.addEventListener('status', e      => { status.textContent = e.detail.text; });
-                narrator.addEventListener('transcript', e  => appendTranscript(e.detail.role, e.detail.text));
-                narrator.addEventListener('error', e       => {
-                    status.textContent = '❌ ' + e.detail.text;
-                    stopNarrator();
-                });
-
-                btn.classList.add('active');
-                btn.title = 'Stop narrator';
-                btn.textContent = '🛑';
-                running = true;
-
-                await narrator.start();
-            }
-
-            function stopNarrator() {
-                if (narrator) { narrator.stop(); narrator = null; }
-                btn.classList.remove('active');
-                btn.textContent = '📖';
-                btn.title = 'Talk to Narrator';
-                status.textContent = 'Click 📖 to listen to the narrator';
-                running = false;
-            }
-
-            btn.addEventListener('click', () => {
-                if (running) stopNarrator();
-                else startNarrator();
-            });
-        })();
     </script>
 </body>
 </html>
