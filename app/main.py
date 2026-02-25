@@ -7,18 +7,16 @@ import certifi
 import google.auth
 from google.auth.transport.requests import Request
 import websockets
-from websockets.exceptions import ConnectionClosed
 from dotenv import load_dotenv
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import httpx
 from httpx_sse import aconnect_sse
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from google.genai import types as genai_types
 from opentelemetry import trace
 from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
 from opentelemetry.sdk.trace import TracerProvider, export
@@ -340,8 +338,11 @@ async def gemini_live_proxy(websocket: WebSocket):
     except Exception as e:
         logger.error(f"Proxy error: {e}")
     finally:
-        if server_websocket and not server_websocket.closed:
-            await server_websocket.close()
+        if server_websocket:
+            try:
+                await server_websocket.close()
+            except Exception:
+                pass
         logger.info("Proxy connection closed")
 
 # MOUNT STATIC FILES
