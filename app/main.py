@@ -346,14 +346,20 @@ async def gemini_live_proxy(websocket: WebSocket):
         logger.info("Proxy connection closed")
 
 # MOUNT STATIC FILES
-demo_path = os.path.join(os.path.dirname(__file__), "frontend", "live_demo")
-if os.path.exists(demo_path):
-    app.mount("/demo", StaticFiles(directory=demo_path, html=True), name="live_demo")
+# Restore legacy demo path for access
+legacy_demo_path = os.path.join(os.path.dirname(__file__), "frontend_legacy", "live_demo")
+if os.path.exists(legacy_demo_path):
+    app.mount("/demo", StaticFiles(directory=legacy_demo_path, html=True), name="live_demo")
 
-# Mount frontend from the copied location
-frontend_path = os.path.join(os.path.dirname(__file__), "frontend")
+# Use 'dist' folder for React production build
+frontend_path = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 if os.path.exists(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+else:
+    # Fallback for development if dist doesn't exist yet
+    legacy_path = os.path.join(os.path.dirname(__file__), "frontend_legacy")
+    if os.path.exists(legacy_path):
+        app.mount("/", StaticFiles(directory=legacy_path, html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn
