@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import type { AppState, Achievement } from './types';
-import { GeminiLiveAPI } from './utils/geminilive';
+import { GeminiLiveAPI, FunctionCallDefinition } from './utils/geminilive';
 import { AudioStreamer, VideoStreamer, AudioPlayer } from './utils/mediaUtils';
 
 // --- ENV VARIABLES ---
@@ -32,13 +32,47 @@ INTERACTION RULES:
 5. VISUALS: Call 'generateIllustration' for every new major scene.
 `;
 
-const customTools = {
-    functionDeclarations: [
-        { name: 'generateIllustration', description: 'Generates a watercolor style illustration.', parameters: { type: 'OBJECT', properties: { prompt: { type: 'STRING' } }, required: ['prompt'] } },
-        { name: 'awardBadge', description: 'Awards a virtual badge.', parameters: { type: 'OBJECT', properties: { badgeId: { type: 'STRING' } }, required: ['badgeId'] } },
-        { name: 'showChoice', description: 'Displays multiple-choice buttons.', parameters: { type: 'OBJECT', properties: { options: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['options'] } }
-    ]
-};
+class GenerateIllustrationTool extends FunctionCallDefinition {
+  callback: (prompt: string) => void;
+  constructor(callback: (prompt: string) => void) {
+    super(
+      "generateIllustration",
+      "Generates a watercolor style illustration.",
+      { type: "object", properties: { prompt: { type: "string" } } },
+      ["prompt"]
+    );
+    this.callback = callback;
+  }
+  functionToCall(parameters: any) { this.callback(parameters.prompt); }
+}
+
+class AwardBadgeTool extends FunctionCallDefinition {
+  callback: (badgeId: string) => void;
+  constructor(callback: (badgeId: string) => void) {
+    super(
+      "awardBadge",
+      "Awards a virtual badge.",
+      { type: "object", properties: { badgeId: { type: "string" } } },
+      ["badgeId"]
+    );
+    this.callback = callback;
+  }
+  functionToCall(parameters: any) { this.callback(parameters.badgeId); }
+}
+
+class ShowChoiceTool extends FunctionCallDefinition {
+  callback: (options: string[]) => void;
+  constructor(callback: (options: string[]) => void) {
+    super(
+      "showChoice",
+      "Displays multiple-choice buttons.",
+      { type: "object", properties: { options: { type: "array", items: { type: "string" } } } },
+      ["options"]
+    );
+    this.callback = callback;
+  }
+  functionToCall(parameters: any) { this.callback(parameters.options); }
+}
 
 const App: React.FC = () => {
   // --- STORY STATE ---
@@ -153,7 +187,7 @@ const App: React.FC = () => {
   const selectChoice = (choice: string) => {
     setStoryChoices([]);
     appendChat("YOU", `I choose: ${choice}`, "text");
-    liveClientRef.current?.sendClientContent([{ text: `I choose: ${choice}` }]);
+    liveClientRef.current?.sendTextMessage(`I choose: ${choice}`);
   };
 
   const sendText = () => {
@@ -170,7 +204,8 @@ const App: React.FC = () => {
     logDebug("Connecting to Gemini...");
 
     try {
-        const client = new GeminiLiveAPI(PROXY_URL, PROJECT_ID, MODEL_ID);
+        const fullProxyUrl = `${PROXY_URL}?project=${PROJECT_ID}&model=${MODEL_ID}`;
+        const client = new GeminiLiveAPI(fullProxyUrl, PROJECT_ID, MODEL_ID);
         liveClientRef.current = client;
 
         client.systemInstructions = SYSTEM_INSTRUCTION;
@@ -180,44 +215,52 @@ const App: React.FC = () => {
         client.outputAudioTranscription = true;
         
         // Register Tools
-        client.addFunction({ declaration: customTools.functionDeclarations[0], functionToCall: (p: any) => generateNewIllustration(p.prompt) });
-        client.addFunction({ declaration: customTools.functionDeclarations[1], functionToCall: (p: any) => handleAwardBadge(p.badgeId) });
-        client.addFunction({ declaration: customTools.functionDeclarations[2], functionToCall: (p: any) => setStoryChoices(p.options) });
+        client.addFunction(new GenerateIllustrationTool((prompt: string) => generateNewIllustration(prompt)));
+        client.addFunction(new AwardBadgeTool((badgeId: string) => handleAwardBadge(badgeId)));
+        client.addFunction(new ShowChoiceTool((options: string[]) => setStoryChoices(options)));
+
+        (client as any).onClose = () => {
+            disconnect();
+        };
 
         client.onReceiveResponse = (message: any) => {
-            if (message.type === 'OUTPUT_TRANSCRIPTION') {
-                if (!message.data.finished) {
+            if (!message || !message.type) return;
+            
+            const msgType = String(message.type).toUpperCase().replace(" ", "_");
+            
+            if (msgType === 'SETUP_COMPLETE') {
+                 setConnectionStatus('Connected');
+                 setAppState('STORYTELLING');
+                 appendChat("SYSTEM", "Setup Complete. Ready!", "system");
+                 logDebug("Setup complete! Magic is starting.");
+            } else if (msgType === 'OUTPUT_TRANSCRIPTION') {
+                if (!message.data?.finished) {
                     setAiTranscription(prev => prev + message.data.text);
                     appendChat("GEMINI", message.data.text, "transcript");
                 }
-            } else if (message.type === 'INPUT_TRANSCRIPTION') {
-                setIsUserSpeaking(!message.data.finished);
-                if (!message.data.finished) appendChat("YOU", message.data.text, "transcript");
-            } else if (message.type === 'TURN_COMPLETE') {
+            } else if (msgType === 'INPUT_TRANSCRIPTION') {
+                setIsUserSpeaking(!message.data?.finished);
+                if (!message.data?.finished) appendChat("YOU", message.data.text, "transcript");
+            } else if (msgType === 'TURN_COMPLETE') {
                 setAiTranscription('');
                 setIsUserSpeaking(false);
-            } else if (message.type === 'INTERRUPTED') {
+            } else if (msgType === 'INTERRUPTED') {
                 setAiTranscription('(Story paused...)');
                 setStoryChoices([]);
                 appendChat("SYSTEM", "[Interrupted]", "system");
                 audioPlayerRef.current?.interrupt();
-            } else if (message.type === 'AUDIO') {
+            } else if (msgType === 'AUDIO') {
                 audioPlayerRef.current?.play(message.data);
-            } else if (message.type === 'SETUP_COMPLETE') {
-                 setConnectionStatus('Connected');
-                 setAppState('STORYTELLING');
-                 appendChat("SYSTEM", "Setup Complete. Ready!", "system");
-                 logDebug("Connection established.");
             }
         };
 
-        client.onError = (err: any) => {
+        (client as any).onError = (err: any) => {
             logDebug("Socket Error: " + err);
             setConnectionStatus('Error');
             setAppState('ERROR');
         };
 
-        await client.connect();
+        client.connect();
 
         const player = new AudioPlayer();
         await player.init();
@@ -267,10 +310,16 @@ const App: React.FC = () => {
     if (!liveClientRef.current) return logDebug("Connect first!");
     if (!isVideoOn) {
       try {
-        if (!videoStreamerRef.current && videoRef.current) {
-            videoStreamerRef.current = new VideoStreamer(liveClientRef.current, videoRef.current);
+        if (!videoStreamerRef.current) {
+            videoStreamerRef.current = new VideoStreamer(liveClientRef.current);
         }
-        await videoStreamerRef.current?.start({ width: 320, height: 240, fps: 1, deviceId: selectedCamera || null });
+        
+        const video = await videoStreamerRef.current?.start({ width: 320, height: 240, fps: 1, deviceId: selectedCamera || null });
+        
+        if (videoRef.current && video?.srcObject) {
+            videoRef.current.srcObject = video.srcObject;
+        }
+
         setIsVideoOn(true);
         setIsCameraActive(true);
         appendChat("SYSTEM", "[Camera ON]", "system");
@@ -417,7 +466,7 @@ const App: React.FC = () => {
                 </div>
             </div>
             
-            <button onClick={() => liveClientRef.current?.sendClientContent([{ text: "Start the magical fairy tale and ask me for my name!" }])} 
+            <button onClick={() => liveClientRef.current?.sendTextMessage("Start the magical fairy tale and ask me for my name!")} 
                     className="w-full bg-gradient-to-r from-yellow-400 to-orange-400 text-white py-3 rounded-xl font-black shadow-md hover:scale-[1.02] transition-transform">
                 Start Fairy Tale (Send Prompt)
             </button>

@@ -266,7 +266,7 @@ def generate_gcp_token():
 async def gemini_live_proxy(websocket: WebSocket):
     """
     WebSocket proxy for Gemini Live API.
-    Replaces the standalone server.py from Google's demo.
+    Extracts Project ID and Model from the query string and connects to Google Cloud.
     """
     await websocket.accept()
     logger.info("🔌 New WebSocket client connected to proxy")
@@ -274,18 +274,21 @@ async def gemini_live_proxy(websocket: WebSocket):
     server_websocket = None
     
     try:
-        # Read settings from browser
-        setup_message_raw = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
-        setup_data = json.loads(setup_message_raw)
-        
-        service_url = setup_data.get("service_url")
-        if not service_url:
-            await websocket.close(code=1008, reason="Service URL is required")
+        query_params = dict(websocket.query_params)
+        project_id = query_params.get("project")
+        model = query_params.get("model", "gemini-live-2.5-flash-native-audio")
+
+        if not project_id:
+            logger.error("❌ Project ID is missing in the WebSocket connection URL")
+            await websocket.close(code=1008, reason="Project ID is required in URL query parameters")
             return
 
-        bearer_token = setup_data.get("bearer_token") or generate_gcp_token()
+        service_url = "wss://us-central1-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent"
+
+        bearer_token = generate_gcp_token()
         if not bearer_token:
-            await websocket.close(code=1008, reason="Authentication failed")
+            logger.error("❌ Failed to generate Google Cloud credentials")
+            await websocket.close(code=1008, reason="Authentication failed on server")
             return
 
         headers = {
@@ -294,34 +297,51 @@ async def gemini_live_proxy(websocket: WebSocket):
         }
         ssl_context = ssl.create_default_context(cafile=certifi.where())
         
-        logger.info(f"Connecting to Gemini API: {service_url.split('?')[0]}...")
+        logger.info(f"🚀 Connecting to Gemini API: {service_url.split('?')[0]}...")
         
         async with websockets.connect(
             service_url, additional_headers=headers, ssl=ssl_context
         ) as s_ws:
             server_websocket = s_ws
-            logger.info("✅ Connected to Gemini API")
+            logger.info("✅ Connected to Gemini API successfully")
 
-            # Channel: Browser -> Google (Only text)
+            # Channel: Browser -> Google
             async def client_to_server():
                 try:
                     while True:
-                        message = await websocket.receive_text()
-                        await server_websocket.send(message)
+                        message = await websocket.receive()
+                        if "text" in message:
+                            text_data = message["text"]
+                            if '"service_url"' in text_data:
+                                logger.info("🗑️ Dropped legacy 'service_url'")
+                                continue
+                            
+                            text_data = text_data.replace('"generation_connfig"', '"generation_config"')
+                            
+                            logger.info(f"➡️ TO GOOGLE: {text_data[:500]}") 
+                            await server_websocket.send(text_data)
+                        elif "bytes" in message:
+                            await server_websocket.send(message["bytes"])
                 except Exception as e:
-                    logger.debug(f"C->S closed: {e}")
+                    logger.error(f"❌ C->S error: {e}")
 
-            # Channel: Google -> Browser (Convert everything to text!)
+            # Channel: Google -> Browser
             async def server_to_client():
                 try:
                     async for message in server_websocket:
-                        # If Google sends JSON as bytes, decode it to a string
                         if isinstance(message, bytes):
-                            message = message.decode('utf-8')
-                        
-                        await websocket.send_text(message)
+                            try:
+                                decoded_msg = message.decode('utf-8')
+                                logger.info(f"⬅️ FROM GOOGLE (decoded): {decoded_msg[:500]}")
+                                await websocket.send_text(decoded_msg)
+                            except UnicodeDecodeError:
+                                logger.info(f"⬅️ FROM GOOGLE (binary data, len: {len(message)})")
+                                await websocket.send_bytes(message)
+                        else:
+                            logger.info(f"⬅️ FROM GOOGLE (text): {message[:500]}")
+                            await websocket.send_text(message)
                 except Exception as e:
-                    logger.debug(f"S->C closed: {e}")
+                    logger.error(f"❌ S->C error: {e}")
 
             pump_tasks = [
                 asyncio.create_task(client_to_server()),
@@ -339,11 +359,12 @@ async def gemini_live_proxy(websocket: WebSocket):
         logger.error(f"Proxy error: {e}")
     finally:
         if server_websocket:
+            logger.error(f"⚠️ Google Closed Connection! Code: {server_websocket.close_code}, Reason: {server_websocket.close_reason}")
             try:
                 await server_websocket.close()
             except Exception:
                 pass
-        logger.info("Proxy connection closed")
+        logger.info("🔌 Proxy connection closed")
 
 # MOUNT STATIC FILES
 # Restore legacy demo path for access
