@@ -1,9 +1,17 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { GoogleGenAI } from '@google/genai';
+import type { AppState, Achievement } from './types';
+import { GeminiLiveAPI } from './utils/geminilive';
+import { AudioStreamer, VideoStreamer, AudioPlayer } from './utils/mediaUtils';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { GoogleGenAI, Modality, Type, type FunctionDeclaration } from '@google/genai';
-import { AppState, type StoryScene, type Achievement } from './types';
-
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+// --- ENV VARIABLES ---
+const PROJECT_ID = import.meta.env.VITE_PROJECT_ID;
+const PROXY_URL = import.meta.env.VITE_PROXY_URL;
+const MODEL_ID = import.meta.env.VITE_MODEL_ID;
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+if (!PROJECT_ID || !PROXY_URL || !MODEL_ID || !GEMINI_API_KEY) {
+  throw new Error('Missing required environment variables');
+}
 
 const INITIAL_ACHIEVEMENTS: Achievement[] = [
   { id: 'bunny_hop', title: 'Hop-Skip', description: 'Hopped around like a real bunny', icon: '🐰', unlocked: false },
@@ -16,61 +24,26 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
 const SYSTEM_INSTRUCTION = `
 You are Gemini Tales, a magical and interactive storyteller. 
 Your goal is to tell an enchanting story and reward the child for participation.
-
 INTERACTION RULES:
-1. INTERRUPTIONS: If the child interrupts with a question or comment, stop the story immediately, answer them warmly in character, and then ask if they want to continue or change the story.
-2. CHOICES: Every 2-3 minutes, give the child a choice to influence the story. Call the 'showChoice' function with 2-3 options (e.g., ["Go to the cave", "Follow the squirrel"]).
-3. MOVEMENT: Ask the child to perform actions (jump, spin, wave). Use the camera to verify.
-4. REWARDS: If they succeed or are very curious, call 'awardBadge' with the appropriate ID.
+1. INTERRUPTIONS: If the child interrupts, stop the story immediately, answer them warmly, and ask to continue.
+2. CHOICES: Call the 'showChoice' function with 2-3 options.
+3. MOVEMENT: Ask the child to perform actions (jump, spin). Use the camera to verify.
+4. REWARDS: If they succeed, call 'awardBadge'.
 5. VISUALS: Call 'generateIllustration' for every new major scene.
-
-Available badges: bunny_hop, wizard_wave, curious_explorer, graceful_leaf, story_lover.
 `;
 
-const generateIllustrationDeclaration: FunctionDeclaration = {
-  name: 'generateIllustration',
-  parameters: {
-    type: Type.OBJECT,
-    description: 'Generates a watercolor style illustration for the scene.',
-    properties: {
-      prompt: { type: Type.STRING, description: 'Prompt for the illustration in English for better image generation.' },
-    },
-    required: ['prompt'],
-  },
-};
-
-const awardBadgeDeclaration: FunctionDeclaration = {
-  name: 'awardBadge',
-  parameters: {
-    type: Type.OBJECT,
-    description: 'Awards a virtual badge to the child.',
-    properties: {
-      badgeId: { type: Type.STRING, description: 'The ID of the badge.' },
-    },
-    required: ['badgeId'],
-  },
-};
-
-const showChoiceDeclaration: FunctionDeclaration = {
-  name: 'showChoice',
-  parameters: {
-    type: Type.OBJECT,
-    description: 'Displays multiple-choice buttons to the child to decide what happens next.',
-    properties: {
-      options: { 
-        type: Type.ARRAY, 
-        items: { type: Type.STRING },
-        description: 'A list of 2 or 3 story choices.' 
-      },
-    },
-    required: ['options'],
-  },
+const customTools = {
+    functionDeclarations: [
+        { name: 'generateIllustration', description: 'Generates a watercolor style illustration.', parameters: { type: 'OBJECT', properties: { prompt: { type: 'STRING' } }, required: ['prompt'] } },
+        { name: 'awardBadge', description: 'Awards a virtual badge.', parameters: { type: 'OBJECT', properties: { badgeId: { type: 'STRING' } }, required: ['badgeId'] } },
+        { name: 'showChoice', description: 'Displays multiple-choice buttons.', parameters: { type: 'OBJECT', properties: { options: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['options'] } }
+    ]
 };
 
 const App: React.FC = () => {
-  const [appState, setAppState] = useState<AppState>(AppState.IDLE);
+  // --- STORY STATE ---
+  const [appState, setAppState] = useState<AppState | 'IDLE' | 'STARTING' | 'STORYTELLING' | 'ERROR'>('IDLE');
   const [currentIllustration, setCurrentIllustration] = useState<string | null>(null);
-  const [userTranscription, setUserTranscription] = useState('');
   const [aiTranscription, setAiTranscription] = useState('');
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [achievements, setAchievements] = useState<Achievement[]>(INITIAL_ACHIEVEMENTS);
@@ -78,32 +51,68 @@ const App: React.FC = () => {
   const [storyChoices, setStoryChoices] = useState<string[]>([]);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const audioContextInRef = useRef<AudioContext | null>(null);
-  const audioContextOutRef = useRef<AudioContext | null>(null);
-  const nextStartTimeRef = useRef(0);
-  const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
-  const sessionPromiseRef = useRef<Promise<any> | null>(null);
-  const frameIntervalRef = useRef<number | null>(null);
+  // --- DEV PANEL STATE ---
+  const [connectionStatus, setConnectionStatus] = useState('Disconnected');
+  const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedMic, setSelectedMic] = useState('');
+  const [selectedCamera, setSelectedCamera] = useState('');
+  const [isAudioOn, setIsAudioOn] = useState(false);
+  const [isVideoOn, setIsVideoOn] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{sender: string, text: string, type: string}[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [debugInfo, setDebugInfo] = useState('Application initialized...\n');
 
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        setIsCameraActive(true);
+  // --- REFS ---
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  
+  const liveClientRef = useRef<GeminiLiveAPI | null>(null);
+  const audioStreamerRef = useRef<AudioStreamer | null>(null);
+  const videoStreamerRef = useRef<VideoStreamer | null>(null);
+  const audioPlayerRef = useRef<AudioPlayer | null>(null);
+
+  // --- INIT DEVICES ---
+  useEffect(() => {
+    async function getDevices() {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        setMics(devices.filter(d => d.kind === 'audioinput'));
+        setCameras(devices.filter(d => d.kind === 'videoinput'));
+      } catch (err) {
+        logDebug("Device access error: " + err);
       }
-      return stream;
-    } catch (err) {
-      console.error("Camera access error:", err);
-      setAppState(AppState.ERROR);
-      return null;
     }
+    getDevices();
+    return () => disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
+
+  // --- UTILS ---
+  const logDebug = (msg: string) => setDebugInfo(prev => `${msg}\n${prev}`.slice(0, 1500));
+  
+  const appendChat = (sender: string, text: string, type: string) => {
+    setChatMessages(prev => {
+      const last = prev[prev.length - 1];
+      if (last && last.sender === sender && type === 'transcript') {
+        const newArr = [...prev];
+        newArr[newArr.length - 1].text += text;
+        return newArr;
+      }
+      return [...prev, { sender, text, type }];
+    });
   };
 
   const generateNewIllustration = async (prompt: string) => {
-    const ai = new GoogleGenAI({ apiKey: API_KEY });
+    if (!GEMINI_API_KEY) { logDebug("API Key missing for image gen."); return; }
+    logDebug(`Generating image: ${prompt}`);
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
@@ -112,15 +121,15 @@ const App: React.FC = () => {
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) {
           setCurrentIllustration(`data:image/png;base64,${part.inlineData.data}`);
+          logDebug("Image generated successfully.");
           break;
         }
       }
-    } catch (err) {
-      console.error("Image generation failed:", err);
-    }
+    } catch (err) { logDebug("Image gen failed: " + err); }
   };
 
   const handleAwardBadge = (badgeId: string) => {
+    logDebug(`Awarding badge: ${badgeId}`);
     setAchievements(prev => {
       const achievement = prev.find(a => a.id === badgeId);
       if (achievement && !achievement.unlocked) {
@@ -134,138 +143,143 @@ const App: React.FC = () => {
 
   const selectChoice = (choice: string) => {
     setStoryChoices([]);
-    sessionPromiseRef.current?.then(s => s.send({ text: `I choose: ${choice}` }));
+    appendChat("YOU", `I choose: ${choice}`, "text");
+    liveClientRef.current?.sendClientContent([{ text: `I choose: ${choice}` }]);
   };
 
-  const handleSessionMessage = async (message: any) => {
-    // Handling transcription and interrupts
-    if (message.serverContent?.outputTranscription) {
-      setAiTranscription(prev => prev + message.serverContent.outputTranscription.text);
-    } else if (message.serverContent?.inputTranscription) {
-      setUserTranscription(prev => prev + message.serverContent.inputTranscription.text);
-      setIsUserSpeaking(true);
-    }
-
-    if (message.serverContent?.turnComplete) {
-      setAiTranscription('');
-      setUserTranscription('');
-      setIsUserSpeaking(false);
-    }
-
-    const audioData = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-    if (audioData && audioContextOutRef.current) {
-      const ctx = audioContextOutRef.current;
-      nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
-      const buffer = await decodeAudioData(decode(audioData), ctx, 24000, 1);
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
-      source.addEventListener('ended', () => sourcesRef.current.delete(source));
-      source.start(nextStartTimeRef.current);
-      nextStartTimeRef.current += buffer.duration;
-      sourcesRef.current.add(source);
-    }
-
-    if (message.serverContent?.interrupted) {
-      sourcesRef.current.forEach(s => s.stop());
-      sourcesRef.current.clear();
-      nextStartTimeRef.current = 0;
-      setAiTranscription('(Story paused...)');
-      setStoryChoices([]);
-    }
-
-    if (message.toolCall) {
-      for (const fc of message.toolCall.functionCalls) {
-        if (fc.name === 'generateIllustration') {
-          generateNewIllustration(fc.args.prompt);
-          sessionPromiseRef.current?.then(s => s.sendToolResponse({
-            functionResponses: { id: fc.id, name: fc.name, response: { result: "Done" } }
-          }));
-        } else if (fc.name === 'awardBadge') {
-          handleAwardBadge(fc.args.badgeId);
-          sessionPromiseRef.current?.then(s => s.sendToolResponse({
-            functionResponses: { id: fc.id, name: fc.name, response: { result: `Awarded` } }
-          }));
-        } else if (fc.name === 'showChoice') {
-          setStoryChoices(fc.args.options);
-          sessionPromiseRef.current?.then(s => s.sendToolResponse({
-            functionResponses: { id: fc.id, name: fc.name, response: { result: `Options shown` } }
-          }));
-        }
-      }
-    }
+  const sendText = () => {
+    if (!chatInput.trim() || !liveClientRef.current) return;
+    appendChat("YOU", chatInput, "text");
+    liveClientRef.current.sendTextMessage(chatInput);
+    setChatInput('');
   };
 
-  const startStory = async () => {
-    setAppState(AppState.STARTING);
-    const stream = await startCamera();
-    if (!stream) return;
+  // --- CORE LOGIC (Split into manual steps like Google Demo) ---
+  const connect = async () => {
+    setAppState('STARTING');
+    setConnectionStatus('Connecting...');
+    logDebug("Connecting to Gemini...");
 
-    audioContextInRef.current = new AudioContext({ sampleRate: 16000 });
-    audioContextOutRef.current = new AudioContext({ sampleRate: 24000 });
+    try {
+        const client = new GeminiLiveAPI(PROXY_URL, PROJECT_ID, MODEL_ID);
+        liveClientRef.current = client;
 
-    const ai = new GoogleGenAI({ apiKey: API_KEY });
-    const sessionPromise = ai.live.connect({
-      model: 'gemini-2.5-flash-native-audio-preview-12-2025',
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseModalities: [Modality.AUDIO],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
-        tools: [{ functionDeclarations: [generateIllustrationDeclaration, awardBadgeDeclaration, showChoiceDeclaration] }],
-        outputAudioTranscription: {},
-        inputAudioTranscription: {},
-      },
-      callbacks: {
-        onopen: () => {
-          setAppState(AppState.STORYTELLING);
-          sessionPromise.then(s => s.sendClientContent({ turns: [{ text: "Start the magical fairy tale and ask the child for their name." }], turnComplete: true }));
-          const source = audioContextInRef.current!.createMediaStreamSource(stream);
-          const processor = audioContextInRef.current!.createScriptProcessor(4096, 1, 1);
-          processor.onaudioprocess = (e) => {
-            const blob = createPcmBlob(e.inputBuffer.getChannelData(0));
-            sessionPromise.then(s => s.sendRealtimeInput({ media: blob }));
-          };
-          source.connect(processor);
-          processor.connect(audioContextInRef.current!.destination);
+        client.systemInstructions = SYSTEM_INSTRUCTION;
+        client.responseModalities = ["AUDIO"];
+        client.voiceName = "Kore";
+        client.inputAudioTranscription = true;
+        client.outputAudioTranscription = true;
+        
+        // Register Tools
+        client.addFunction({ declaration: customTools.functionDeclarations[0], functionToCall: (p: any) => generateNewIllustration(p.prompt) });
+        client.addFunction({ declaration: customTools.functionDeclarations[1], functionToCall: (p: any) => handleAwardBadge(p.badgeId) });
+        client.addFunction({ declaration: customTools.functionDeclarations[2], functionToCall: (p: any) => setStoryChoices(p.options) });
 
-          frameIntervalRef.current = window.setInterval(() => {
-            if (videoRef.current && canvasRef.current) {
-              const canvas = canvasRef.current;
-              canvas.width = 320; canvas.height = 240;
-              canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0, 320, 240);
-              canvas.toBlob(blob => {
-                if (blob) {
-                  const reader = new FileReader();
-                  reader.onloadend = () => {
-                    const base64 = (reader.result as string).split(',')[1];
-                    sessionPromise.then(s => s.sendRealtimeInput({ media: { data: base64, mimeType: 'image/jpeg' } }));
-                  };
-                  reader.readAsDataURL(blob);
+        client.onReceiveResponse = (message: any) => {
+            if (message.type === 'OUTPUT_TRANSCRIPTION') {
+                if (!message.data.finished) {
+                    setAiTranscription(prev => prev + message.data.text);
+                    appendChat("GEMINI", message.data.text, "transcript");
                 }
-              }, 'image/jpeg', 0.5);
+            } else if (message.type === 'INPUT_TRANSCRIPTION') {
+                setIsUserSpeaking(!message.data.finished);
+                if (!message.data.finished) appendChat("YOU", message.data.text, "transcript");
+            } else if (message.type === 'TURN_COMPLETE') {
+                setAiTranscription('');
+                setIsUserSpeaking(false);
+            } else if (message.type === 'INTERRUPTED') {
+                setAiTranscription('(Story paused...)');
+                setStoryChoices([]);
+                appendChat("SYSTEM", "[Interrupted]", "system");
+                audioPlayerRef.current?.interrupt();
+            } else if (message.type === 'AUDIO') {
+                audioPlayerRef.current?.play(message.data);
+            } else if (message.type === 'SETUP_COMPLETE') {
+                 setConnectionStatus('Connected');
+                 setAppState('STORYTELLING');
+                 appendChat("SYSTEM", "Setup Complete. Ready!", "system");
+                 logDebug("Connection established.");
             }
-          }, 4000);
-        },
-        onmessage: handleSessionMessage,
-        onclose: () => setAppState(AppState.IDLE),
-      },
-    });
-    sessionPromiseRef.current = sessionPromise;
+        };
+
+        client.onError = (err: any) => {
+            logDebug("Socket Error: " + err);
+            setConnectionStatus('Error');
+            setAppState('ERROR');
+        };
+
+        await client.connect();
+
+        const player = new AudioPlayer();
+        await player.init();
+        audioPlayerRef.current = player;
+
+    } catch (error) {
+        logDebug("Failed to connect: " + error);
+        setConnectionStatus('Failed');
+        setAppState('ERROR');
+    }
   };
 
-  const stopStory = () => {
-    if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
-    sessionPromiseRef.current?.then(s => s.close());
-    setAppState(AppState.IDLE);
+  const disconnect = () => {
+    audioStreamerRef.current?.stop();
+    videoStreamerRef.current?.stop();
+    liveClientRef.current?.webSocket?.close();
+    
+    setAppState('IDLE');
+    setConnectionStatus('Disconnected');
+    setIsAudioOn(false);
+    setIsVideoOn(false);
     setIsCameraActive(false);
     setCurrentIllustration(null);
     setStoryChoices([]);
-    if (videoRef.current?.srcObject) (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+    logDebug("Disconnected from Gemini.");
+  };
+
+  const toggleAudio = async () => {
+    if (!liveClientRef.current) return logDebug("Connect first!");
+    if (!isAudioOn) {
+      try {
+        if (!audioStreamerRef.current) audioStreamerRef.current = new AudioStreamer(liveClientRef.current);
+        await audioStreamerRef.current.start(selectedMic || undefined);
+        setIsAudioOn(true);
+        appendChat("SYSTEM", "[Mic ON]", "system");
+        logDebug("Audio streaming started.");
+      } catch (err: any) { logDebug("Audio error: " + err); }
+    } else {
+      audioStreamerRef.current?.stop();
+      setIsAudioOn(false);
+      appendChat("SYSTEM", "[Mic OFF]", "system");
+      logDebug("Audio streaming stopped.");
+    }
+  };
+
+  const toggleVideo = async () => {
+    if (!liveClientRef.current) return logDebug("Connect first!");
+    if (!isVideoOn) {
+      try {
+        if (!videoStreamerRef.current && videoRef.current) {
+            videoStreamerRef.current = new VideoStreamer(liveClientRef.current, videoRef.current);
+        }
+        await videoStreamerRef.current?.start({ width: 320, height: 240, fps: 1, deviceId: selectedCamera || null });
+        setIsVideoOn(true);
+        setIsCameraActive(true);
+        appendChat("SYSTEM", "[Camera ON]", "system");
+        logDebug("Video streaming started.");
+      } catch (err: any) { logDebug("Video error: " + err); }
+    } else {
+      videoStreamerRef.current?.stop();
+      setIsVideoOn(false);
+      setIsCameraActive(false);
+      appendChat("SYSTEM", "[Camera OFF]", "system");
+      logDebug("Video streaming stopped.");
+    }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 space-y-8 relative overflow-hidden bg-[#faf7f2]">
-      {/* Interactive Achievement Popup */}
+    <div className="min-h-screen flex flex-col items-center p-4 md:p-8 space-y-8 overflow-y-auto bg-[#faf7f2] font-sans">
+      
+      {/* --- ACHIEVEMENT POPUP --- */}
       {lastAwarded && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/20 backdrop-blur-sm animate-in fade-in duration-300">
            <div className="bg-white rounded-[40px] shadow-2xl p-10 border-8 border-yellow-400 flex flex-col items-center gap-4 animate-bounce">
@@ -278,52 +292,37 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Header */}
-      <header className="text-center z-10">
-        <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent">
-          Gemini Tales
-        </h1>
+      {/* --- HEADER --- */}
+      <header className="text-center z-10 w-full max-w-7xl">
+        <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent">Gemini Tales</h1>
         <p className="text-xl text-gray-500 mt-2 font-medium italic">A magical world where stories come to life!</p>
       </header>
 
-      {/* Main Experience */}
-      <main className="w-full max-w-7xl flex flex-col lg:flex-row gap-8 z-10 h-full">
-        {/* Story Canvas Side */}
+      {/* --- MAIN STORY EXPERIENCE (Beautiful UI) --- */}
+      <main className="w-full max-w-7xl flex flex-col lg:flex-row gap-8 z-10">
         <div className="flex-1 flex flex-col gap-6">
-          <div className="glass-card rounded-[40px] overflow-hidden flex-1 shadow-2xl flex flex-col relative min-h-[450px]">
-            <div className="flex-1 bg-white/40 flex items-center justify-center relative">
+          <div className="glass-card rounded-[40px] overflow-hidden flex-1 shadow-xl flex flex-col relative min-h-[400px] bg-white/60 border border-white/50 backdrop-blur-md">
+            <div className="flex-1 bg-white/20 flex items-center justify-center relative">
               {currentIllustration ? (
                 <img src={currentIllustration} className="w-full h-full object-cover animate-in fade-in duration-1000" alt="Story Scene" />
               ) : (
                 <div className="text-center p-12 space-y-6">
-                  {appState === AppState.IDLE ? (
-                    <div className="space-y-8">
-                       <div className="w-48 h-48 bg-gradient-to-br from-purple-100 to-pink-100 rounded-full mx-auto flex items-center justify-center shadow-inner">
-                          <span className="text-6xl animate-pulse">✨</span>
-                       </div>
-                       <button onClick={startStory} className="bg-gradient-to-br from-purple-500 to-pink-500 text-white px-16 py-6 rounded-full font-black text-3xl shadow-xl hover:scale-110 active:scale-95 transition-all">
-                        Begin Your Story
-                      </button>
-                    </div>
+                  {appState === 'IDLE' ? (
+                    <div className="text-gray-400 font-medium">Connect and start media below to begin the magic.</div>
                   ) : (
                     <div className="flex flex-col items-center gap-6">
                       <div className="w-20 h-20 border-8 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-                      <p className="text-purple-600 text-xl font-black">The magic begins...</p>
+                      <p className="text-purple-600 text-xl font-black">Story is active...</p>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Story Choices Overlay */}
               {storyChoices.length > 0 && (
                 <div className="absolute inset-0 z-20 flex items-center justify-center p-12 bg-black/30 backdrop-blur-[2px]">
                    <div className="flex flex-col md:flex-row gap-6 w-full max-w-3xl">
                       {storyChoices.map((choice, i) => (
-                        <button 
-                          key={i} 
-                          onClick={() => selectChoice(choice)}
-                          className="flex-1 bg-white/95 hover:bg-yellow-400 hover:scale-105 active:scale-95 transition-all p-8 rounded-3xl shadow-2xl border-4 border-purple-400 text-xl font-black text-purple-900"
-                        >
+                        <button key={i} onClick={() => selectChoice(choice)} className="flex-1 bg-white/95 hover:bg-yellow-400 hover:scale-105 active:scale-95 transition-all p-8 rounded-3xl shadow-2xl border-4 border-purple-400 text-xl font-black text-purple-900">
                           {choice}
                         </button>
                       ))}
@@ -331,90 +330,120 @@ const App: React.FC = () => {
                 </div>
               )}
             </div>
-
-            {/* AI Text Display */}
             <div className="bg-white/95 p-8 border-t border-white/50 backdrop-blur-xl">
-              <p className="text-purple-950 text-3xl font-medium leading-relaxed italic text-center">
-                {aiTranscription || (appState === AppState.STORYTELLING ? "..." : "Your story awaits")}
+              <p className="text-purple-950 text-2xl font-medium leading-relaxed italic text-center">
+                {aiTranscription || (appState === 'STORYTELLING' ? "..." : "Your story awaits")}
               </p>
             </div>
           </div>
-
-          {/* User Voice / Interruption Indicator */}
-          <div className={`h-16 flex items-center justify-center gap-4 transition-all duration-300 ${isUserSpeaking ? 'opacity-100' : 'opacity-40 grayscale'}`}>
-            <div className="flex gap-1 h-8 items-center">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className={`w-2 bg-pink-500 rounded-full transition-all duration-300 ${isUserSpeaking ? 'animate-bounce' : 'h-1'}`} style={{ animationDelay: `${i * 0.1}s` }}></div>
-              ))}
-            </div>
-            <span className="text-pink-600 font-black text-sm uppercase tracking-widest">
-              {isUserSpeaking ? "I'm listening!" : "You can interrupt me"}
-            </span>
-          </div>
         </div>
 
-        {/* Sidebar for Interaction & Assets */}
         <div className="w-full lg:w-96 flex flex-col gap-6">
-          {/* Magic Camera View */}
-          <div className={`glass-card rounded-[40px] overflow-hidden aspect-square relative shadow-2xl bg-indigo-950 border-4 transition-all duration-500 ${isUserSpeaking ? 'border-pink-400 scale-[1.02]' : 'border-white/20'}`}>
+          <div className={`glass-card rounded-[40px] overflow-hidden aspect-square relative shadow-xl bg-indigo-950 border-4 transition-all duration-500 ${isUserSpeaking ? 'border-pink-400 scale-[1.02]' : 'border-white/20'}`}>
             <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover transform -scale-x-100 transition-opacity duration-1000 ${isCameraActive ? 'opacity-80' : 'opacity-0'}`} />
-            
-            {/* Listening Ring overlay */}
-            {isUserSpeaking && (
-              <div className="absolute inset-0 border-[12px] border-pink-400/50 animate-pulse rounded-[40px] pointer-events-none"></div>
-            )}
-
             {!isCameraActive && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white/20">
                 <span className="text-6xl mb-4">📷</span>
-                <span className="font-black text-xs uppercase tracking-tighter">Camera Standby</span>
+                <span className="font-black text-xs uppercase tracking-tighter">Camera Off</span>
               </div>
             )}
-            
             <div className="absolute bottom-6 left-6 bg-black/60 px-4 py-2 rounded-full flex items-center gap-3 backdrop-blur-md">
                <div className={`w-3 h-3 rounded-full ${isCameraActive ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-               <span className="text-white text-[12px] font-black tracking-widest uppercase">
-                 {isUserSpeaking ? "User Speaking" : "AI Storytelling"}
-               </span>
+               <span className="text-white text-[12px] font-black tracking-widest uppercase">{isUserSpeaking ? "User Speaking" : "AI Storytelling"}</span>
             </div>
           </div>
 
-          {/* Achievements Grid */}
-          <div className="glass-card rounded-[40px] p-8 flex-1 shadow-inner bg-white/40 overflow-y-auto max-h-[400px] border border-white">
-            <h3 className="text-xl font-black text-purple-800 mb-6 flex items-center gap-3">
-              <span className="text-3xl">🏺</span> My Achievements
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
+          <div className="glass-card rounded-[40px] p-6 flex-1 shadow-inner bg-white/60 overflow-y-auto max-h-[300px] border border-white/50 backdrop-blur-md">
+            <h3 className="text-lg font-black text-purple-800 mb-4 flex items-center gap-2"><span className="text-2xl">🏺</span> Achievements</h3>
+            <div className="grid grid-cols-2 gap-3">
               {achievements.map(ach => (
-                <div key={ach.id} className={`group relative p-4 rounded-3xl border-2 transition-all flex flex-col items-center text-center ${ach.unlocked ? 'bg-white border-yellow-300 shadow-xl' : 'bg-gray-200/40 border-transparent grayscale opacity-30'}`}>
-                  <span className={`text-5xl mb-2 transition-transform duration-500 ${ach.unlocked ? 'group-hover:rotate-12 group-hover:scale-110' : ''}`}>{ach.icon}</span>
-                  <span className="text-[11px] font-black text-gray-800 uppercase tracking-tighter">{ach.title}</span>
-                  {ach.unlocked && (
-                    <div className="absolute top-2 right-2 bg-yellow-400 text-[10px] w-6 h-6 rounded-full flex items-center justify-center shadow-sm">
-                      ✨
-                    </div>
-                  )}
-                  {/* Detailed Description Tooltip */}
-                  <div className="absolute bottom-full mb-3 hidden group-hover:block w-40 bg-purple-900 text-white text-[10px] p-3 rounded-2xl z-50 pointer-events-none shadow-2xl">
-                    <p className="font-bold mb-1">{ach.title}</p>
-                    {ach.description}
-                  </div>
+                <div key={ach.id} className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center text-center ${ach.unlocked ? 'bg-white border-yellow-300 shadow-md' : 'bg-gray-200/40 border-transparent grayscale opacity-40'}`}>
+                  <span className="text-4xl mb-1">{ach.icon}</span>
+                  <span className="text-[10px] font-black text-gray-800 uppercase tracking-tighter leading-tight">{ach.title}</span>
                 </div>
               ))}
             </div>
           </div>
-
-          {appState !== AppState.IDLE && (
-            <button onClick={stopStory} className="bg-red-50 text-red-500 py-6 rounded-[30px] font-black text-lg hover:bg-red-500 hover:text-white transition-all shadow-lg active:scale-95">
-              Close Storybook
-            </button>
-          )}
         </div>
       </main>
 
-      <footer className="text-center text-gray-500 text-[11px] py-4 max-w-4xl z-10 leading-relaxed font-medium">
-        <p>Gemini Tales uses advanced AI to watch, listen, and tell stories. Ensure your child is in a safe space for physical movement. No data is stored beyond this session.</p>
-      </footer>
+      {/* --- DEVELOPER CONTROL CENTER (The Google UI you requested) --- */}
+      <section className="w-full max-w-7xl bg-white/80 backdrop-blur-xl border-2 border-purple-100 shadow-2xl rounded-[40px] p-8 z-10 flex flex-col lg:flex-row gap-8">
+        
+        {/* Connection & Media Settings */}
+        <div className="flex-1 flex flex-col gap-6">
+            <div>
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">🔌 Connection & Media</h3>
+                <div className="flex gap-3 mb-4">
+                    <button onClick={connect} disabled={connectionStatus === 'Connected'} className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed">Connect API</button>
+                    <button onClick={disconnect} disabled={connectionStatus !== 'Connected'} className="bg-red-100 text-red-600 hover:bg-red-200 px-6 py-2 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed">Disconnect</button>
+                </div>
+                <div className="text-sm font-medium text-gray-600">
+                    Status: <span className={connectionStatus === 'Connected' ? 'text-green-600 font-bold' : 'text-purple-600 font-bold'}>{connectionStatus}</span>
+                </div>
+            </div>
+
+            <div className="space-y-4 bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Microphone</label>
+                    <select className="w-full border border-gray-200 rounded-lg p-2 bg-white text-sm" value={selectedMic} onChange={e => setSelectedMic(e.target.value)}>
+                        <option value="">Default Microphone</option>
+                        {mics.map(m => <option key={m.deviceId} value={m.deviceId}>{m.label}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Camera</label>
+                    <select className="w-full border border-gray-200 rounded-lg p-2 bg-white text-sm" value={selectedCamera} onChange={e => setSelectedCamera(e.target.value)}>
+                        <option value="">Default Camera</option>
+                        {cameras.map(c => <option key={c.deviceId} value={c.deviceId}>{c.label}</option>)}
+                    </select>
+                </div>
+                <div className="flex gap-3 pt-2">
+                    <button onClick={toggleAudio} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${isAudioOn ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
+                        {isAudioOn ? 'Stop Audio' : 'Start Audio'}
+                    </button>
+                    <button onClick={toggleVideo} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${isVideoOn ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
+                        {isVideoOn ? 'Stop Video' : 'Start Video'}
+                    </button>
+                </div>
+            </div>
+            
+            <button onClick={() => liveClientRef.current?.sendClientContent([{ text: "Start the magical fairy tale and ask me for my name!" }])} 
+                    className="w-full bg-gradient-to-r from-yellow-400 to-orange-400 text-white py-3 rounded-xl font-black shadow-md hover:scale-[1.02] transition-transform">
+                Start Fairy Tale (Send Prompt)
+            </button>
+        </div>
+
+        {/* Chat & Debug */}
+        <div className="flex-1 flex flex-col gap-4">
+            <div>
+                <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">💬 Chat Logs</h3>
+                <div ref={chatContainerRef} className="border border-gray-200 bg-white rounded-xl h-[180px] overflow-y-auto p-4 space-y-2 shadow-inner text-sm">
+                    {chatMessages.length === 0 && <div className="text-gray-400 italic">Connect to Gemini to start chatting...</div>}
+                    {chatMessages.map((msg, i) => (
+                        <div key={i} className="leading-tight">
+                            <span className={`font-black text-[10px] px-2 py-0.5 mr-2 rounded text-white uppercase tracking-wider ${
+                                msg.sender === 'SYSTEM' ? 'bg-red-500' : msg.sender === 'GEMINI' ? 'bg-blue-500' : 'bg-green-500'
+                            }`}>{msg.sender}</span>
+                            <span className={msg.type === 'transcript' ? 'italic text-gray-600' : 'text-gray-800 font-medium'}>{msg.text}</span>
+                        </div>
+                    ))}
+                </div>
+                <div className="flex gap-2 mt-2">
+                    <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendText()} placeholder="Type message to Gemini..." className="flex-1 border border-gray-200 rounded-lg p-2 text-sm outline-none focus:border-purple-400" />
+                    <button onClick={sendText} className="bg-gray-800 text-white px-4 rounded-lg text-sm font-bold hover:bg-gray-700 transition-colors">Send</button>
+                </div>
+            </div>
+
+            <div>
+                <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">🐛 Debug Console</h3>
+                <pre className="border border-gray-200 bg-gray-900 text-green-400 rounded-xl h-[120px] overflow-y-auto p-4 text-[11px] font-mono shadow-inner whitespace-pre-wrap">
+                    {debugInfo}
+                </pre>
+            </div>
+        </div>
+      </section>
+
     </div>
   );
 };
