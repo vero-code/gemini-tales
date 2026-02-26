@@ -72,19 +72,28 @@ const App: React.FC = () => {
   const videoStreamerRef = useRef<VideoStreamer | null>(null);
   const audioPlayerRef = useRef<AudioPlayer | null>(null);
 
-  // --- INIT DEVICES ---
-  useEffect(() => {
-    async function getDevices() {
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        setMics(devices.filter(d => d.kind === 'audioinput'));
-        setCameras(devices.filter(d => d.kind === 'videoinput'));
-      } catch (err) {
-        logDebug("Device access error: " + err);
+  // --- DEVICE MANAGEMENT ---
+  const fetchDevices = async () => {
+    try {
+      let devices = await navigator.mediaDevices.enumerateDevices();
+      const hasEmptyLabels = devices.some(d => !d.label);
+      if (hasEmptyLabels) {
+        logDebug("Requesting permission to read device names...");
+        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        tempStream.getTracks().forEach(track => track.stop());
+        devices = await navigator.mediaDevices.enumerateDevices();
       }
+
+      setMics(devices.filter(d => d.kind === 'audioinput'));
+      setCameras(devices.filter(d => d.kind === 'videoinput'));
+      logDebug("Devices refreshed successfully.");
+    } catch (err) {
+      logDebug("Device access error (or denied): " + err);
     }
-    getDevices();
+  };
+
+  useEffect(() => {
+    fetchDevices();
     return () => disconnect();
   }, []);
 
