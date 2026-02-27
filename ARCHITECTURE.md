@@ -36,8 +36,8 @@ Gemini Tales is an integrated AI storytelling system built on the Google Agent D
 
 | Component | Responsibility | Primary Technology |
 |---|---|---|
-| **Frontend** | Interactive UI for story generation and display | HTML5 / Vanilla JS / CSS3 |
-| **API Layer** | Proxy between UI and Agent Orchestrator | Python / FastAPI / Uvicorn |
+| **Frontend** | Modern, interactive UI for story generation and live storytelling | React / Vite / Tailwind CSS |
+| **API Layer** | WebSocket Proxy & Static File Host | Python / FastAPI / Uvicorn |
 | **Story Engine** | Multi-agent pipeline for research and writing | Google ADK / A2A Protocol |
 
 The system is deployed as a suite of microservices: a main FastAPI server serves the frontend and exposes the chat API, while four independent agents handle the processing logic.
@@ -60,8 +60,11 @@ Server (Cloud Run / localhost)
 ```
 gemini-tales/
 ├── app/                        # Main FastAPI Server & Frontend
-│   ├── main.py                 # API proxy logic & static file mounting
-│   ├── frontend/               # Vanilla JS source (index.html, app.js, style.css)
+│   ├── main.py                 # WebSocket Proxy & Static Site Host
+│   ├── frontend/               # React Frontend source
+│   │   ├── src/                # TypeScript/React components
+│   │   ├── dist/               # Production build (mounted by FastAPI)
+│   │   └── package.json        # Node.js dependencies
 │   ├── authenticated_httpx.py  # Google-auth client factory
 │   └── Dockerfile
 │
@@ -86,33 +89,45 @@ gemini-tales/
 
 ## 3. Subsystem A — Interactive Story UI (Frontend)
 
-The frontend is a lightweight, high-performance web interface built with pure HTML, CSS, and JavaScript. It communicates with the FastAPI backend via an NDJSON (Newline Delimited JSON) stream for real-time progress updates.
+The frontend is a modern, high-performance web interface built with **React**, **Vite**, and **Tailwind CSS**. It serves as a real-time bridge to the **Gemini Live API** for immersive storytelling.
 
 ### 3.1 Component Map
 
 ```
-app/frontend/
-  ├── index.html   — Landing page with topic input
-  ├── story.html   — Dedicated viewer for the generated markdown story
-  ├── app.js       — Application logic (Form handling, SSE/NDJSON streaming)
-  └── style.css    — Modern, responsive design system (Glassmorphism inspired)
+app/frontend/src/
+  ├── App.tsx       — Main application container & logic
+  ├── types.ts      — Shared TypeScript interfaces
+  └── utils/
+      ├── geminilive.ts — Gemini Live API client & tool definitions
+      └── mediaUtils.ts — Audio/Video streaming utilities
 ```
 
-### 3.2 State Management
+### 3.2 State Management & Hooks
 
-The frontend uses `localStorage` to persist the generated story content between the generation phase (landing page) and the reading phase (display page).
+The application uses standard React state (`useState`, `useRef`, `useEffect`) to manage the complex real-time story state:
 
-1. **Generation State**: Tracked via DOM mutations in `app.js` (swapping form for progress bar).
-2. **Persistence**: `currentCourse` and `renderedContent` (Google Search HTML) are stored in `localStorage`.
+1. **App State**: Tracks connection status (`IDLE`, `STARTING`, `STORYTELLING`, `ERROR`).
+2. **Media State**: Manages microphone/camera activation and selected devices.
+3. **Story State**: Handles AI transcriptions, generated illustrations, and story choices.
+4. **Achievements**: Persists unlocked badges for the current session.
 
-### 3.3 NDJSON Stream Protocol
+### 3.3 Gemini Live Integration
 
-The frontend uses the `Fetch API` and `ReadableStream` to parse the backend response line-by-line:
+The frontend establishes a direct WebSocket connection to the backend proxy, which forwards messages to the Gemini Live API:
 
-| Event Type | Payload | Action |
-|---|---|---|
-| `progress` | `{ type: "progress", text: "..." }` | Updates the status label and highlights pipeline steps. |
-| `result`   | `{ type: "result", text: "...", rendered_content: "..." }` | Saves data and redirects to `story.html`. |
+- **Audio Pipeline**: Raw PCM audio is captured from the mic, base64 encoded, and sent to Gemini. AI audio responses are decoded and played using the `AudioContext` API.
+- **Vision Pipeline**: Video frames are captured at a low frame rate (1 fps) and sent to Gemini for visual awareness.
+- **Interruption Handling**: The client listens for the `INTERRUPTED` event to stop local audio playback immediately.
+
+### 3.4 Tool-call Protocol
+
+The system implements a custom tool-calling protocol over the Gemini Live session:
+
+| Tool | Action |
+|---|---|
+| `generateIllustration` | Triggers **Gemini 2.5 Flash Image** to create a scene illustration. |
+| `awardBadge` | Unlocks a virtual achievement in the UI. |
+| `showChoice` | Renders interactive buttons for story branch selection. |
 
 ---
 
@@ -160,73 +175,44 @@ Orchestrator
 
 ### 4.4 FastAPI Proxy Layer
 
-`app/main.py` sits between the browser and the Orchestrator:
+`app/main.py` serves two critical functions:
 
-```
-Browser POST /api/chat_stream
-  └─► FastAPI
-        ├─► list_agents()         (if agent_name not yet known)
-        ├─► get_session()         (reuse existing session if session_id provided)
-        │    └─► create_session() (otherwise create a new one)
-        └─► query_adk_server()    (SSE stream from orchestrator /run_sse)
-              └─► event_generator()
-                    ├─► "researcher" event  → yield progress: "🔍 Adventure Seeker is gathering..."
-                    ├─► "judge" event       → yield progress: "⚖️ Guardian of Balance is evaluating..."
-                    ├─► "content_builder"   → yield progress: "✍️ Storysmith is writing..."
-                    └─► final content       → yield result: <markdown story>
+1. **Static File Hosting**: Serves the compiled React frontend from the `dist/` directory.
+2. **Gemini Live WebSocket Proxy**: Exposes a `/ws/proxy` endpoint that handles the complex handshake and authentication with the Google Cloud Vertex AI endpoint.
 
-Response: application/x-ndjson (newline-delimited JSON)
-```
-
-All communication with the ADK server is done via `httpx_sse.aconnect_sse` for real-time streaming.
+**Proxy Workflow:**
+1. Browser connects to `ws://localhost:8000/ws/proxy?project=...&model=...`.
+2. FastAPI backend generates a fresh **Google OAuth2 bearer token**.
+3. It establishes a secure WebSocket connection to the **LlmBidiService** in `us-central1`.
+4. It bi-directionally pipes messages between the browser and Google, handling binary audio data and JSON tool calls transparently.
 
 ---
 
 ## 5. Data Flows
 
-### 5.1 Main Generation Loop
+### 5.1 Real-time Storytelling Flow (WebSocket)
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Browser (Frontend)                                         │
-│                                                             │
-│  User Input (Topic) ──► POST /api/chat_stream ─────────────┼──► FastAPI (Proxy)
-│                                                             │         │
-│  NDJSON Stream ◄────────────────────────────────────────────┼─────────┘
-│    ├─► type: "progress" → Update UI status                  │
-│    └─► type: "result"   → Save to localStorage & Redirect    │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────┐          ┌─────────────────────────┐          ┌─────────────────────────┐
+│   Browser (React UI)    │          │     FastAPI Proxy       │          │    Gemini Live API      │
+└────────────┬────────────┘          └────────────┬────────────┘          └────────────┬────────────┘
+             │                                    │                                    │
+             │ ─── WebSocket Connection ─────────►│                                    │
+             │                                    │ ─── Handshake & Auth ─────────────►│
+             │                                    │                                    │
+             │ ◄── [Setup Complete] ──────────────│ ◄──────────────────────────────────│
+             │                                    │                                    │
+             │ ─── Audio/Video Stream ───────────►│ ─── Forward Binary ───────────────►│
+             │                                    │                                    │
+             │ ◄── AI Audio & Transcript ─────────│ ◄── Forward Response ──────────────│
+             │                                    │                                    │
+             │ ◄── [TOOL_CALL: awardBadge] ───────│ ◄──────────────────────────────────│
+             │                                    │                                    │
 ```
 
-### 5.2 Multi-agent Story Engine End-to-End {#52-multi-agent-story-engine-end-to-end}
+### 5.2 Multi-agent Research Flow
 
-```
-User types topic
-  │
-  ▼
-Browser POST /api/chat_stream  { message, user_id, session_id? }
-  │
-  ▼
-FastAPI (port 8000)
-  ├─► creates / reuses ADK session
-  └─► SSE stream from Orchestrator (port 8004)
-        │
-        ├── LoopAgent starts:
-        │   ├─► Adventure Seeker (8001) — google_search → research_findings (state)
-        │   ├─► Guardian of Balance (8002) — evaluate research → judge_feedback (state)
-        │   └─► EscalationChecker
-        │         ├── FAIL → loop (max 3×)
-        │         └── PASS → escalate, exit loop
-        │
-        └── Storysmith (8003) — reads research_findings → markdown story
-              │
-              ▼
-        FastAPI streams NDJSON to browser:
-          { type: "progress", text: "🔍 Adventure Seeker is gathering..." }
-          { type: "progress", text: "⚖️ Guardian of Balance is evaluating..." }
-          { type: "progress", text: "✍️ Storysmith is writing..." }
-          { type: "result",   text: "# Story Title\n## Chapter..." }
-```
+The ADK agents are still utilized by the `content_builder` during specific story transitions or for pre-generating lore, following the same A2A orchestration described in Subsystem B.
 
 ---
 
@@ -234,11 +220,11 @@ FastAPI (port 8000)
 
 | Service | Port | Technology | Start command |
 |---|---|---|---|
-| **App** (Frontend + API proxy) | `8000` | FastAPI + Uvicorn | `uvicorn main:app` |
-| **Adventure Seeker** (Researcher) | `8001` | ADK A2A server | `adk_app.py --a2a` |
-| **Guardian of Balance** (Judge) | `8002` | ADK A2A server | `adk_app.py --a2a` |
-| **Storysmith** (Builder) | `8003` | ADK A2A server | `adk_app.py --a2a` |
-| **Orchestrator Agent** | `8004` | ADK server (non-A2A) | `adk_app.py` |
+| **App** (Frontend + Proxy) | `8000` | FastAPI + React (dist) | `uvicorn main:app` |
+| **Adventure Seeker** | `8001` | ADK A2A server | `adk_app.py --a2a` |
+| **Guardian of Balance**| `8002` | ADK A2A server | `adk_app.py --a2a` |
+| **Storysmith** | `8003` | ADK A2A server | `adk_app.py --a2a` |
+| **Orchestrator** | `8004` | ADK server | `adk_app.py` |
 
 All services are started in the correct order by `run_local.ps1`. A 5-second sleep ensures leaf agents are ready before the orchestrator tries to resolve their agent cards.
 
@@ -264,11 +250,11 @@ The `course-creator` (App) Cloud Run service is publicly accessible. The four ag
 
 ## 8. Key Design Decisions
 
-### Direct API from browser (Live Storytelling)
-The frontend calls the Gemini Live API directly using the `VITE_API_KEY` without routing through a backend. This minimises latency for the real-time audio loop, but means the API key is exposed in the browser environment — acceptable for a hackathon demo, should be proxied in production.
+### Proxied WebSocket Communication
+Instead of calling the Gemini Live API directly from the browser, we use a FastAPI WebSocket proxy. This ensures that the **Vertex AI credentials** and **Project ID** remain secure on the server, while still providing a low-latency pipe for audio and video data.
 
-### Single-component frontend
-All state and logic live in `App.tsx`. This was chosen for simplicity and speed of iteration during a hackathon. Future refactoring would split audio, camera, session management, and UI into separate hooks/components.
+### React + Vite Single Page Application (SPA)
+The front end was migrated from Vanilla JS to a React SPA. This allows for more robust state management of the complex real-time media streams and tool calls, as well as a more responsive and premium UI.
 
 ### LoopAgent with EscalationChecker
 Rather than using a fixed number of research passes, the Judge's `output_schema` produces a structured `{ status: "pass"|"fail" }` verdict. The `EscalationChecker` reads this from session state and escalates the loop early when quality is sufficient (up to a safety cap of 3 iterations).
@@ -289,12 +275,11 @@ The Orchestrator saves agent outputs (`research_findings`, `judge_feedback`) int
 | Layer | Technology | Version |
 |---|---|---|
 | Large Language Model | Gemini 2.5 Flash / Pro | (Default: `gemini-2.5-flash`) |
+| Live Interaction | Gemini Live API | — |
 | Multi-agent framework | Google Agent Development Kit (ADK) | `1.22.0` |
-| Agent protocol | A2A (Agent-to-Agent) | `a2a-sdk 0.3.*` |
-| Frontend | Vanilla HTML5 / JavaScript / CSS3 | — |
-| Backend | FastAPI + Uvicorn | `0.123.*` / `0.40.0` |
-| Async Streaming | NDJSON / Event-Driven | — |
-| Python | CPython | `≥ 3.10, < 3.14` |
+| Frontend | React + Vite + Tailwind CSS | — |
+| Backend | FastAPI + Uvicorn | `0.123.*` |
+| Protocol | WebSocket / A2A | — |
+| Python | CPython | `≥ 3.10` |
 | Package manager | uv | — |
-| Observability | OpenTelemetry + Google Cloud Trace | `1.11.0` |
 | Hosting | Google Cloud Run | — |

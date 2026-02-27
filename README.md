@@ -4,11 +4,11 @@
 ![Hackathon](https://img.shields.io/badge/hackathon-Gemini%20Live%20Agent%20Challenge-4285F4?style=flat-square&logo=google)
 ![IDE](https://img.shields.io/badge/IDE-Google%20Antigravity-673AB7?style=flat-square&logo=googlecloud)
 ![Cloud](https://img.shields.io/badge/deployed-Cloud%20Run-blue?style=flat-square&logo=googlecloud)
-![Version](https://img.shields.io/badge/version-v1.0.0-green?style=flat-square)
+![Version](https://img.shields.io/badge/version-v1.1.0-green?style=flat-square)
 
 > **Turning screen time into active adventure — A magical AI storyteller that sees, hears, and moves with your child.**
 
-Gemini Tales is an interactive storytelling experience that blends real-time AI conversation with physical activity. While the **Gemini Live API** handles the magical conversation and vision on the frontend, a specialized **multi-agent backend** (built with Google ADK) works behind the scenes to research local legends, verify safety, and craft movement-based "Hero's Challenges."
+Gemini Tales is an interactive storytelling experience that blends real-time AI conversation with physical activity. Built with a modern **React + Vite** frontend, it leverages the **Gemini Live API** for magical conversation and vision, while a specialized **multi-agent backend** (built with Google ADK) works behind the scenes to research local legends, verify safety, and craft movement-based "Hero's Challenges."
 
 ---
 
@@ -18,10 +18,10 @@ The frontend is a direct bridge to **Gemini 2.5 Flash Native Audio**, allowing f
 
 | Feature | Magic Behind the Scenes |
 |---|---|
-| 🎙️ **Natural Voice Chat** | Interruption-aware conversation. The child can speak or change the story path at any time. |
+| 🎙️ **Gemini Live Voice** | Interruption-aware, low-latency conversation. The child can speak or change the story path at any time. |
 | 📸 **Visual Awareness** | The AI "sees" the child through the camera, reacting to their costumes, toys, or movement in real-time. |
-| 🎨 **On-the-fly Art** | Dynamic watercolor illustrations are generated as the story unfolds using **Gemini 2.5 Flash Image**. |
-| 🏆 **Physical Badges** | Achievements like **Hop-Skip** are awarded for real-world participation and movement. |
+| 🎨 **Dynamic Illustrations** | Watercolor-style art is generated as the story unfolds, reflecting the unique narrative of each child. |
+| 🏆 **Developer Tools** | A built-in **Developer Control Center** allows for real-time debugging, chat logs, and media management. |
 
 ---
 
@@ -29,7 +29,7 @@ The frontend is a direct bridge to **Gemini 2.5 Flash Native Audio**, allowing f
 
 Our backend uses the **Google Agent Development Kit (ADK)** and the **A2A (Agent-to-Agent) protocol**, following the methodology of the [**"Optimize Agent Behavior"**](https://www.skills.google/paths/3545/course_templates/1564) course.
 
-### 🎭 Meet the Agents (Optimized Workflow v0.4.0)
+### 🎭 Meet the Agents
 
 Each agent is engineered using the **5-pattern prompt architecture** (Identity, Mission, Methodology, Boundaries, and Few-shot Examples) to ensure maximum role-adherence and reliability.
 
@@ -89,7 +89,7 @@ For a detailed deep-dive into the system design, component responsibilities, and
 - **[uv](https://docs.astral.sh/uv/)** for lightning-fast backend management.
 - **Google Cloud Project** with Vertex AI enabled.
 
-### 1. Backend Launch (v0.4.0)
+### 1. Backend Launch
 The backend runs five distributed services natively from the root: the App, three specialized agents, and an orchestrator.
 
 #### **Easy Mode (Windows)**
@@ -130,11 +130,11 @@ uv run app/main.py
 | **Researcher** | `8001` | "Adventure Seeker" (Search Tool). |
 | **Judge** | `8002` | "Guardian of Balance" (Consistency/Safety). |
 | **Builder** | `8003` | "Storysmith" (Narrative Generation). |
-| **API/App** | `8000` | Gateway & Client Provider. |
+| **Main App** | `8000` | FastAPI Proxy & React Static Host. |
 
 Open http://localhost:8000 in your browser.
 
-### 2. Deployment to Cloud Run (v1.0.0)
+### 2. Deployment to Cloud Run
 
 Gemini Tales is fully optimized for **Google Cloud Run**, leveraging its serverless scale and secure service-to-service communication.
 
@@ -155,7 +155,7 @@ This script handles:
 #### **Deployed Services Architecture**
 | Service | Access Level | Description |
 |---|---|---|
-| `gemini-tales` | **Public** | The main web frontend and A2A gateway. |
+| `gemini-tales` | **Public** | Main web frontend (React) and A2A gateway. |
 | `orchestrator` | Private | The master controller for agent missions. |
 | `researcher` | Private | High-speed data gathering via Google Search. |
 | `judge` | Private | Content validation and safety enforcement. |
@@ -165,15 +165,17 @@ This script handles:
 
 ## 🛠️ Tech Stack
 
+-   **Frontend**: **React**, **Vite**, and **Tailwind CSS**. A modern, responsive UI with glassmorphism effects and real-time state management.
+
 -   **Cloud Infrastructure**: **Google Cloud Run**. Serverless hosting for high-availability and secure agentic microservices.
 
--   **Intelligence & Reasoning**: **Gemini 2.5 Flash & Pro** via **Google AI Studio** & **Vertex AI (Google Cloud)**. Using Flash for speed/cost-efficiency and Pro for high-quality creative storytelling.
+-   **Intelligence & Reasoning**: **Gemini 2.5 Flash & Pro** via **Google AI Studio** & **Vertex AI (Google Cloud)**. Featuring **Gemini Live** for immersive voice/vision.
     
--   **Agentic Ecosystem**: **Google ADK (Agent Development Kit)**. The core framework used to build and deploy our autonomous agent personas.
+-   **Agentic Ecosystem**: **Google ADK (Agent Development Kit)**. The core framework for our autonomous agent personas.
     
 -   **Development & Debugging**: **Antigravity (IDE)**. Our agentic development platform, evolving the IDE for the agent-first era. Used for agent visualization, cross-surface control (editor, terminal, browser), and real-time monitoring of agent missions.
-    
--   **Communication Protocol**: **Agent-to-Agent (A2A)**. The standardized protocol for secure and seamless communication between the Researcher, Judge, and Storysmith agents.
+
+-   **Communication Protocol**: **Agent-to-Agent (A2A)** and a **FastAPI Proxy** for WebSocket communication.
     
 -   **Validation & Reliability**: **Pydantic** for structured data output and **Gemini Safety Settings** for strict content filtering (BLOCK_LOW_AND_ABOVE).
     
