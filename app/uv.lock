@@ -203,33 +203,6 @@ wheels = [
 ]
 
 [[package]]
-name = "course-creation-app"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "fastapi" },
-    { name = "google-cloud-logging" },
-    { name = "google-genai" },
-    { name = "httpx" },
-    { name = "httpx-sse" },
-    { name = "opentelemetry-exporter-gcp-trace" },
-    { name = "python-dotenv" },
-    { name = "uvicorn" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi", specifier = "==0.123.*" },
-    { name = "google-cloud-logging", specifier = "==3.13.0" },
-    { name = "google-genai", specifier = "==1.57.*" },
-    { name = "httpx", specifier = "==0.28.*" },
-    { name = "httpx-sse", specifier = "==0.4.*" },
-    { name = "opentelemetry-exporter-gcp-trace", specifier = "==1.11.0" },
-    { name = "python-dotenv", specifier = "==1.0.1" },
-    { name = "uvicorn", specifier = "==0.40.0" },
-]
-
-[[package]]
 name = "cryptography"
 version = "46.0.5"
 source = { registry = "https://pypi.org/simple" }
@@ -309,6 +282,33 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/22/ff/e01087de891010089f1620c916c0c13130f3898177955c13e2b02d22ec4a/fastapi-0.123.10.tar.gz", hash = "sha256:624d384d7cda7c096449c889fc776a0571948ba14c3c929fa8e9a78cd0b0a6a8", size = 356360, upload-time = "2025-12-05T21:27:46.237Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d7/f0/7cb92c4a720def85240fd63fbbcf147ce19e7a731c8e1032376bb5a486ac/fastapi-0.123.10-py3-none-any.whl", hash = "sha256:0503b7b7bc71bc98f7c90c9117d21fdf6147c0d74703011b87936becc86985c1", size = 111774, upload-time = "2025-12-05T21:27:44.78Z" },
+]
+
+[[package]]
+name = "gemini-tales"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "fastapi" },
+    { name = "google-cloud-logging" },
+    { name = "google-genai" },
+    { name = "httpx" },
+    { name = "httpx-sse" },
+    { name = "opentelemetry-exporter-gcp-trace" },
+    { name = "python-dotenv" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = "==0.123.*" },
+    { name = "google-cloud-logging", specifier = "==3.13.0" },
+    { name = "google-genai", specifier = "==1.57.*" },
+    { name = "httpx", specifier = "==0.28.*" },
+    { name = "httpx-sse", specifier = "==0.4.*" },
+    { name = "opentelemetry-exporter-gcp-trace", specifier = "==1.11.0" },
+    { name = "python-dotenv", specifier = "==1.0.1" },
+    { name = "uvicorn", specifier = "==0.40.0" },
 ]
 
 [[package]]

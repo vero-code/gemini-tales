@@ -23,13 +23,11 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
 
 const SYSTEM_INSTRUCTION = `
 You are Gemini Tales, a magical and interactive storyteller. 
-Your goal is to tell an enchanting story and reward the child for participation.
+Your goal is to tell an enchanting story to a child.
 INTERACTION RULES:
-1. INTERRUPTIONS: If the child interrupts, stop the story immediately, answer them warmly, and ask to continue.
-2. CHOICES: Call the 'showChoice' function with 2-3 options.
-3. MOVEMENT: Ask the child to perform actions (jump, spin). Use the camera to verify.
-4. REWARDS: If they succeed, call 'awardBadge'.
-5. VISUALS: Call 'generateIllustration' for every new major scene.
+1. Speak warmly and expressively.
+2. If the child interrupts, stop the story immediately, answer them, and then ask if they want to continue.
+3. Keep the conversation natural and fun.
 `;
 
 class GenerateIllustrationTool extends FunctionCallDefinition {
@@ -210,14 +208,14 @@ const App: React.FC = () => {
 
         client.systemInstructions = SYSTEM_INSTRUCTION;
         client.responseModalities = ["AUDIO"];
-        client.voiceName = "Kore";
+        client.voiceName = "Puck";
         client.inputAudioTranscription = true;
         client.outputAudioTranscription = true;
         
         // Register Tools
-        client.addFunction(new GenerateIllustrationTool((prompt: string) => generateNewIllustration(prompt)));
-        client.addFunction(new AwardBadgeTool((badgeId: string) => handleAwardBadge(badgeId)));
-        client.addFunction(new ShowChoiceTool((options: string[]) => setStoryChoices(options)));
+        // client.addFunction(new GenerateIllustrationTool((prompt: string) => generateNewIllustration(prompt)));
+        // client.addFunction(new AwardBadgeTool((badgeId: string) => handleAwardBadge(badgeId)));
+        // client.addFunction(new ShowChoiceTool((options: string[]) => setStoryChoices(options)));
 
         (client as any).onClose = () => {
             disconnect();
@@ -233,6 +231,14 @@ const App: React.FC = () => {
                  setAppState('STORYTELLING');
                  appendChat("SYSTEM", "Setup Complete. Ready!", "system");
                  logDebug("Setup complete! Magic is starting.");
+
+                 setTimeout(() => {
+                     if (liveClientRef.current) {
+                         // TODO: Intercepting history from the content_builder agent
+                         liveClientRef.current.sendTextMessage("Start the magical fairy tale immediately. Introduce yourself as a magical storyteller and ask for my name.");
+                         appendChat("SYSTEM", "Auto-starting story...", "system");
+                     }
+                 }, 500);
             } else if (msgType === 'OUTPUT_TRANSCRIPTION') {
                 if (!message.data?.finished) {
                     setAiTranscription(prev => prev + message.data.text);
@@ -251,6 +257,25 @@ const App: React.FC = () => {
                 audioPlayerRef.current?.interrupt();
             } else if (msgType === 'AUDIO') {
                 audioPlayerRef.current?.play(message.data);
+            } else if (msgType === 'TOOL_CALL' || msgType === 'TOOLCALL') {
+                logDebug("🛠️ Gemini is using a tool...");
+                const functionCalls = message.data?.functionCalls || [];
+                
+                functionCalls.forEach((fc: any) => {
+                   logDebug(`Calling tool: ${fc.name}`);
+                   
+                   if (fc.name === 'generateIllustration') {
+                       generateNewIllustration(fc.args.prompt);
+                   } else if (fc.name === 'awardBadge') {
+                       handleAwardBadge(fc.args.badgeId);
+                   } else if (fc.name === 'showChoice') {
+                       setStoryChoices(fc.args.options);
+                   }
+                   
+                   if (liveClientRef.current) {
+                       liveClientRef.current.sendToolResponse(fc.id, { result: "Success" });
+                   }
+                });
             }
         };
 
@@ -465,11 +490,6 @@ const App: React.FC = () => {
                     </button>
                 </div>
             </div>
-            
-            <button onClick={() => liveClientRef.current?.sendTextMessage("Start the magical fairy tale and ask me for my name!")} 
-                    className="w-full bg-gradient-to-r from-yellow-400 to-orange-400 text-white py-3 rounded-xl font-black shadow-md hover:scale-[1.02] transition-transform">
-                Start Fairy Tale (Send Prompt)
-            </button>
         </div>
 
         {/* Chat & Debug */}
