@@ -8,8 +8,9 @@ import { AudioStreamer, VideoStreamer, AudioPlayer } from './utils/mediaUtils';
 const PROJECT_ID = import.meta.env.VITE_PROJECT_ID;
 const PROXY_URL = import.meta.env.VITE_PROXY_URL;
 const MODEL_ID = import.meta.env.VITE_MODEL_ID;
+const MODEL_ID_IMAGE = import.meta.env.VITE_MODEL_ID_IMAGE;
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-if (!PROJECT_ID || !PROXY_URL || !MODEL_ID || !GEMINI_API_KEY) {
+if (!PROJECT_ID || !PROXY_URL || !MODEL_ID || !MODEL_ID_IMAGE || !GEMINI_API_KEY) {
   throw new Error('Missing required environment variables');
 }
 
@@ -28,6 +29,7 @@ INTERACTION RULES:
 1. Speak warmly and expressively.
 2. If the child interrupts, stop the story immediately, answer them, and then ask if they want to continue.
 3. Keep the conversation natural and fun.
+4. VISUALS: Call 'generateIllustration' for every new major scene.
 `;
 
 class GenerateIllustrationTool extends FunctionCallDefinition {
@@ -156,7 +158,7 @@ const App: React.FC = () => {
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: MODEL_ID_IMAGE,
         contents: { parts: [{ text: `Magical watercolor illustration for children's story: ${prompt}` }] },
       });
       for (const part of response.candidates?.[0]?.content?.parts || []) {
@@ -213,7 +215,7 @@ const App: React.FC = () => {
         client.outputAudioTranscription = true;
         
         // Register Tools
-        // client.addFunction(new GenerateIllustrationTool((prompt: string) => generateNewIllustration(prompt)));
+        client.addFunction(new GenerateIllustrationTool((prompt: string) => generateNewIllustration(prompt)));
         // client.addFunction(new AwardBadgeTool((badgeId: string) => handleAwardBadge(badgeId)));
         // client.addFunction(new ShowChoiceTool((options: string[]) => setStoryChoices(options)));
 
@@ -273,7 +275,17 @@ const App: React.FC = () => {
                    }
                    
                    if (liveClientRef.current) {
-                       liveClientRef.current.sendToolResponse(fc.id, { result: "Success" });
+                       const correctPayload = {
+                           tool_response: {
+                               function_responses: [
+                                   {
+                                       id: fc.id,
+                                       response: { result: "Success" }
+                                   }
+                               ]
+                           }
+                       };
+                       liveClientRef.current.sendMessage(correctPayload);
                    }
                 });
             }
